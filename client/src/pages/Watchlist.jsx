@@ -51,7 +51,7 @@ const Watchlist = () => {
               <div key={movie.movieId} className="bg-gray-800 rounded-xl overflow-hidden shadow-lg hover:shadow-2xl transition-all duration-300 group relative border border-gray-700">
                 <div className="relative aspect-[2/3]">
                   <img
-                    src={`https://image.tmdb.org/t/p/w500${movie.posterPath}`}
+                    src={movie.posterPath && movie.posterPath !== "N/A" ? movie.posterPath : "https://via.placeholder.com/500x750?text=No+Image"}
                     alt={movie.title}
                     className="w-full h-full object-cover"
                   />

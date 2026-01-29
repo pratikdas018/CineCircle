@@ -1,8 +1,10 @@
 import { useState, useContext, useEffect } from "react";
 import { AuthContext } from "../../context/AuthContext";
 import api from "../../services/api";
+import { toast } from "react-hot-toast";
+import { formatDistanceToNow } from "date-fns";
 
-const ReviewSection = ({ movieId, onReviewAdded }) => {
+const ReviewSection = ({ movieId, movieTitle, onReviewAdded, onStatsUpdate, filterRating, currentUserInWatchlist }) => {
   const { user } = useContext(AuthContext);
   const [reviews, setReviews] = useState([]);
   const [rating, setRating] = useState(5);
@@ -13,9 +15,37 @@ const ReviewSection = ({ movieId, onReviewAdded }) => {
   const [error, setError] = useState(null);
   const [selectedImage, setSelectedImage] = useState(null);
 
+  // Inject pulse animation
+  useEffect(() => {
+    const style = document.createElement('style');
+    style.innerHTML = `
+      @keyframes subtle-pulse {
+        0%, 100% { opacity: 1; transform: scale(1); }
+        50% { opacity: 0.85; transform: scale(1.03); }
+      }
+      .animate-badge-pulse { animation: subtle-pulse 3s infinite ease-in-out; }
+    `;
+    document.head.appendChild(style);
+    return () => document.head.removeChild(style);
+  }, []);
+
   useEffect(() => {
     api.get(`/api/reviews/${movieId}`).then((res) => setReviews(res.data));
   }, [movieId]);
+
+  useEffect(() => {
+    const count = reviews.length;
+    const distribution = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+    reviews.forEach(r => {
+      const val = Math.round(Number(r.rating));
+      if (distribution[val] !== undefined) distribution[val]++;
+    });
+    const avg = count > 0 
+      ? (reviews.reduce((acc, r) => acc + Number(r.rating), 0) / count).toFixed(1) 
+      : 0;
+    
+    onStatsUpdate?.({ avg, count, distribution });
+  }, [reviews, onStatsUpdate]);
 
   const handleImageChange = (e) => {
     const file = e.target.files[0];
@@ -36,6 +66,7 @@ const ReviewSection = ({ movieId, onReviewAdded }) => {
 
     const formData = new FormData();
     formData.append("movieId", movieId);
+    formData.append("movieTitle", movieTitle);
     formData.append("rating", rating);
     formData.append("comment", comment);
     if (image) {
@@ -51,8 +82,15 @@ const ReviewSection = ({ movieId, onReviewAdded }) => {
       setComment("");
       setImage(null);
       setPreview(null);
-      setReviews((prev) => [res.data, ...prev]);
+      setReviews((prev) => {
+        const exists = prev.find(r => r._id === res.data._id);
+        if (exists) {
+          return prev.map(r => r._id === res.data._id ? res.data : r);
+        }
+        return [res.data, ...prev];
+      });
       if (onReviewAdded) onReviewAdded(res.data);
+      toast.success("Review posted successfully!");
     } catch (err) {
       setError("Failed to post review. Please try again.");
       console.error(err);
@@ -66,8 +104,25 @@ const ReviewSection = ({ movieId, onReviewAdded }) => {
     try {
       await api.delete(`/api/reviews/${reviewId}`);
       setReviews((prev) => prev.filter((r) => r._id !== reviewId));
+      toast.success("Review deleted");
     } catch (err) {
-      alert("Failed to delete review.");
+      toast.error("Failed to delete review.");
+    }
+  };
+
+  const handleLike = async (reviewId) => {
+    if (!user) {
+      toast.error("Please login to like reviews.");
+      return;
+    }
+
+    try {
+      const res = await api.post(`/api/reviews/${reviewId}/like`);
+      setReviews((prev) =>
+        prev.map((r) => (r._id === reviewId ? { ...r, likes: res.data.likes } : r))
+      );
+    } catch (err) {
+      toast.error("Failed to update like.");
     }
   };
 
@@ -139,12 +194,20 @@ const ReviewSection = ({ movieId, onReviewAdded }) => {
         </div>
       )}
 
-      <h3 className="text-2xl font-bold text-white mb-6">Reviews</h3>
+      <h3 className="text-2xl font-bold text-white mb-6">
+        {filterRating ? `${filterRating} Star Reviews` : "Reviews"}
+      </h3>
       <div className="space-y-6">
-        {reviews.length === 0 ? (
-          <p className="text-gray-400">No reviews yet. Be the first to review!</p>
-        ) : (
-          reviews.map((review) => (
+        {(() => {
+          const filteredReviews = filterRating 
+            ? reviews.filter(r => Math.round(Number(r.rating)) === filterRating)
+            : reviews;
+
+          if (filteredReviews.length === 0) {
+            return <p className="text-gray-400">{filterRating ? `No ${filterRating} star reviews found.` : "No reviews yet. Be the first to review!"}</p>;
+          }
+
+          return filteredReviews.map((review) => (
             <div key={review._id} className="bg-gray-800 p-6 rounded-xl border border-gray-700">
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-3">
@@ -152,15 +215,26 @@ const ReviewSection = ({ movieId, onReviewAdded }) => {
                     {review.user?.name?.charAt(0).toUpperCase() || "U"}
                   </div>
                   <div>
-                    <p className="font-bold text-white">{review.user?.name || "Unknown User"}</p>
-                    <p className="text-xs text-gray-400">{new Date(review.createdAt).toLocaleDateString()}</p>
+                    <div className="flex items-center gap-2">
+                      <p className="font-bold text-white">{review.user?.name || "Unknown User"}</p>
+                      {((review.user?._id === user?._id || review.user === user?._id) ? currentUserInWatchlist : review.isVerified) && (
+                        <span className="bg-blue-500/20 text-blue-400 text-[10px] font-bold px-2 py-0.5 rounded-full border border-blue-500/30 flex items-center gap-1 uppercase tracking-wider animate-badge-pulse" title="This user has this movie in their watchlist">
+                          <span className="text-xs">✓</span> Verified Watcher
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs text-gray-400">
+                      {formatDistanceToNow(new Date(review.createdAt), { addSuffix: true })}
+                    </p>
                   </div>
                 </div>
+
                 <div className="flex items-center gap-3">
                   <div className="flex items-center bg-gray-700 px-3 py-1 rounded-lg">
                     <span className="text-yellow-400 mr-1">⭐</span>
                     <span className="font-bold text-white">{review.rating}</span>
                   </div>
+
                   {user && (review.user?._id === user._id || review.user === user._id) && (
                     <button
                       onClick={() => handleDelete(review._id)}
@@ -172,20 +246,38 @@ const ReviewSection = ({ movieId, onReviewAdded }) => {
                   )}
                 </div>
               </div>
+
               <p className="text-gray-300 mb-4 leading-relaxed">{review.comment}</p>
+
               {review.image && (
                 <div className="mt-4">
-                  <img 
-                    src={`http://localhost:5000${review.image}`} 
-                    alt="Review attachment" 
+                  <img
+                    src={`http://localhost:5000${review.image}`}
+                    alt="Review attachment"
                     className="rounded-lg max-h-64 object-cover border border-gray-600 cursor-pointer hover:opacity-90 transition-opacity"
-                    onClick={() => setSelectedImage(`http://localhost:5000${review.image}`)}
+                    onClick={() =>
+                      setSelectedImage(`http://localhost:5000${review.image}`)
+                    }
                   />
                 </div>
               )}
+
+              <div className="mt-4 pt-4 border-t border-gray-700/50 flex items-center gap-4">
+                <button
+                  onClick={() => handleLike(review._id)}
+                  className={`flex items-center gap-2 px-3 py-1.5 rounded-lg transition-all ${
+                    review.likes?.includes(user?._id)
+                      ? "bg-blue-500/10 text-blue-400 border border-blue-500/30"
+                      : "text-gray-400 hover:bg-gray-700 border border-transparent"
+                  }`}
+                >
+                  <span className="text-lg">{review.likes?.includes(user?._id) ? "👍" : "🤍"}</span>
+                  <span className="font-medium">{review.likes?.length || 0}</span>
+                </button>
+              </div>
             </div>
-          ))
-        )}
+          ));
+        })()}
       </div>
 
       {selectedImage && (

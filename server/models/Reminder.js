@@ -8,7 +8,7 @@ const reminderSchema = new mongoose.Schema(
       required: true,
     },
     movieTitle: String,
-    movieId: Number,
+    movieId: String, // Changed to String to support IMDb IDs
     remindAt: Date,
     notified: {
       type: Boolean,

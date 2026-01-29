@@ -20,7 +20,6 @@ import reminderRoutes from "./routes/reminder.routes.js";
 import startReminderJob from "./utils/scheduler.js";
 import streamingRoutes from "./routes/streaming.routes.js";
 import searchRoutes from "./routes/search.routes.js";
-import upload from "./middleware/upload.middleware.js";
 
 
 const __filename = fileURLToPath(import.meta.url);
@@ -56,7 +55,7 @@ app.use("/api/auth", authRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/movies", movieRoutes);
 app.use("/api/watchlist", watchlistRoutes);
-app.use("/api/reviews", upload.single("image"), reviewRoutes);
+app.use("/api/reviews", reviewRoutes);
 app.use("/api/friends", friendRoutes);
 app.use("/api/chat", chatRoutes);
 app.use("/api/reminders", reminderRoutes);

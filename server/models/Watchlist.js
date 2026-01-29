@@ -8,7 +8,7 @@ const watchlistSchema = new mongoose.Schema(
       required: true,
     },
     movieId: {
-      type: Number, // TMDB movie ID
+      type: String, // Changed to String to support IMDb IDs (e.g., "tt1234567")
       required: true,
     },
     title: String,

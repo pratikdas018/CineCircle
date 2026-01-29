@@ -8,8 +8,11 @@ const reviewSchema = new mongoose.Schema(
       required: true,
     },
     movieId: {
-      type: Number, // TMDB movie ID
+      type: String, // Changed to String to support IMDb IDs (e.g., "tt1234567")
       required: true,
+    },
+    movieTitle: {
+      type: String,
     },
     rating: {
       type: Number,
@@ -24,6 +27,19 @@ const reviewSchema = new mongoose.Schema(
     image: {
       type: String,
     },
+    likes: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+      },
+    ],
+    comments: [
+      {
+        user: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+        text: String,
+        createdAt: { type: Date, default: Date.now },
+      },
+    ],
   },
   { timestamps: true }
 );
