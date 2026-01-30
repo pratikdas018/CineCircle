@@ -93,9 +93,9 @@ const Notifications = () => {
             <p className="text-gray-500 animate-pulse">Loading your activity...</p>
           </div>
         ) : notifications.length === 0 ? (
-          <div className="text-center py-24 bg-slate-200/20 dark:bg-slate-800/20 rounded-3xl border border-slate-300 dark:border-slate-800 border-dashed flex flex-col items-center">
+          <div className="text-center py-16 md:py-24 bg-slate-200/20 dark:bg-slate-800/20 rounded-3xl border border-slate-300 dark:border-slate-800 border-dashed flex flex-col items-center">
             <span className="text-6xl mb-4 opacity-20">📭</span>
-            <p className="text-2xl text-slate-500 font-light">Your inbox is empty</p>
+            <p className="text-xl md:text-2xl text-slate-500 font-light">Your inbox is empty</p>
             <p className="text-slate-400 mt-2">Interactions from your friends will appear here.</p>
           </div>
         ) : (

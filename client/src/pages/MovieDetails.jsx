@@ -74,7 +74,7 @@ const MovieDetails = () => {
   }
 
   return (
-    <div className="min-h-screen bg-transparent text-slate-900 dark:text-slate-100 p-8 transition-all duration-500 ease-in-out">
+    <div className="min-h-screen bg-transparent text-slate-900 dark:text-slate-100 p-4 md:p-8 transition-all duration-500 ease-in-out">
       <div className="max-w-6xl mx-auto">
         <div className="flex flex-col md:flex-row gap-8">
           <div className="w-full md:w-1/3 lg:w-1/4 flex-shrink-0">
@@ -109,7 +109,7 @@ const MovieDetails = () => {
           </div>
 
           <div className="flex-1">
-            <h1 className="text-4xl font-extrabold mb-4">{movie.Title}</h1>
+            <h1 className="text-3xl md:text-4xl font-extrabold mb-4">{movie.Title}</h1>
             <div className="flex flex-wrap gap-4 text-slate-600 dark:text-slate-300 mb-6">
               {movie.Released && (
                 <span className="flex items-center gap-2 bg-white dark:bg-slate-800 px-3 py-1 rounded-lg text-sm font-medium border border-slate-200 dark:border-slate-700">

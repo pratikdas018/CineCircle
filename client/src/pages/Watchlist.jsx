@@ -25,9 +25,9 @@ const Watchlist = () => {
 
   return (
     <PageTransition>
-      <div className="min-h-screen bg-transparent text-slate-900 dark:text-slate-100 p-8 transition-all duration-500 ease-in-out">
+      <div className="min-h-screen bg-transparent text-slate-900 dark:text-slate-100 p-4 md:p-8 transition-all duration-500 ease-in-out">
       <div className="max-w-7xl mx-auto">
-        <h1 className="text-4xl font-extrabold mb-10 border-b border-slate-200 dark:border-slate-800 pb-4 flex items-center">
+        <h1 className="text-3xl md:text-4xl font-extrabold mb-10 border-b border-slate-200 dark:border-slate-800 pb-4 flex items-center">
           <span className="mr-3 text-yellow-400 drop-shadow-md">⭐</span> My Watchlist
         </h1>
 
@@ -43,12 +43,12 @@ const Watchlist = () => {
             <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-yellow-400"></div>
           </div>
         ) : movies.length === 0 ? (
-          <div className="text-center py-32 bg-white dark:bg-slate-900/30 rounded-3xl border border-slate-200 dark:border-slate-800 border-dashed">
-            <p className="text-3xl text-slate-500 font-light">Your watchlist is empty.</p>
+          <div className="text-center py-20 md:py-32 bg-white dark:bg-slate-900/30 rounded-3xl border border-slate-200 dark:border-slate-800 border-dashed">
+            <p className="text-2xl md:text-3xl text-slate-500 font-light">Your watchlist is empty.</p>
             <p className="text-slate-400 mt-4 text-lg">Go explore and add some movies to track!</p>
           </div>
         ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-8">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 md:gap-8">
             {movies.map((movie) => (
               <div key={movie.movieId} className="bg-white dark:bg-slate-900 rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-all duration-300 group relative border border-slate-200 dark:border-slate-800">
                 <div className="relative aspect-[2/3]">

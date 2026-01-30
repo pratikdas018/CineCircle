@@ -1,133 +1,165 @@
-import { useContext, useEffect } from "react";
-import { Link, useNavigate } from "react-router-dom";
-import api from "../../services/api";
+import { useState, useContext, useEffect } from "react";
+import { Link, NavLink } from "react-router-dom";
 import { AuthContext } from "../../context/AuthContext";
 import { NotificationContext } from "../../context/NotificationContext";
-import { SocketContext } from "../../context/SocketContext";
-import { toast } from "react-hot-toast";
-import { useTheme } from "../../context/ThemeContext";
-import { motion, AnimatePresence } from "framer-motion";
 
 const Navbar = () => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [theme, setTheme] = useState(localStorage.getItem("theme") || "light");
   const { user, logout } = useContext(AuthContext);
-  const { unreadCount, setUnreadCount } = useContext(NotificationContext);
-  const socket = useContext(SocketContext);
-  const { theme, toggleTheme } = useTheme();
-  const navigate = useNavigate();
-
-  const handleLogout = () => {
-    logout();
-    navigate("/login");
-  };
-
-  // 🔢 Fetch initial unread count on mount
-  useEffect(() => {
-    if (user) {
-      api.get("/api/notifications/unread-count")
-        .then(res => setUnreadCount(res.data.count))
-        .catch(err => console.error("Failed to fetch unread count", err));
-    }
-  }, [user, setUnreadCount]);
+  const { unreadCount } = useContext(NotificationContext);
 
   useEffect(() => {
-    if (user && socket) {
-      const handleNotification = (data) => {
-        // 🔊 Play notification sound
-        const audio = new Audio("/notification.mp3");
-        audio.play().catch((err) => console.log("Audio play blocked or failed", err));
-
-        setUnreadCount((prev) => prev + 1);
-
-        const message = data.type === "like"
-          ? `❤️ ${data.senderName} liked your review for ${data.movieTitle}`
-          : data.type === "mention"
-          ? `📣 ${data.senderName} mentioned you in a comment on ${data.movieTitle}`
-          : `💬 ${data.senderName} commented on your review for ${data.movieTitle}`;
-
-        toast(message, {
-          icon: "🔔",
-          style: { borderRadius: "10px", background: "#333", color: "#fff" },
-        });
-      };
-
-      socket.on("getNotification", handleNotification);
-      return () => socket.off("getNotification", handleNotification);
+    if (theme === "dark") {
+      document.documentElement.classList.add("dark");
+    } else {
+      document.documentElement.classList.remove("dark");
     }
-  }, [user, socket, setUnreadCount]);
+    localStorage.setItem("theme", theme);
+  }, [theme]);
+
+  const toggleTheme = () => setTheme(theme === "light" ? "dark" : "light");
+
+  const toggleMenu = () => setIsOpen(!isOpen);
+  const closeMenu = () => setIsOpen(false);
+
+  const navLinks = [
+    { name: "Home", path: "/" },
+    { name: "Watchlist", path: "/watchlist" },
+    { name: "Friends", path: "/friends" },
+  ];
 
   return (
-    <nav className="bg-white/80 dark:bg-slate-950/80 border-b border-slate-200 dark:border-slate-800 px-8 py-3 flex justify-between items-center sticky top-0 z-50 backdrop-blur-md transition-all duration-500 ease-in-out">
-      <Link to="/" className="text-2xl font-black text-rose-600 tracking-tighter hover:text-rose-500 transition-all">
-        CineCircle
-      </Link>
-
-      <div className="flex items-center gap-6">
-        {user ? (
-          <>
-            <Link to="/" className="text-slate-600 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 font-semibold transition-colors">Home</Link>
-            <Link to="/watchlist" className="text-slate-600 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 font-semibold transition-colors">Watchlist</Link>
-            <Link to="/friends" className="text-slate-600 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 font-semibold transition-colors">Friends</Link>
-            
-            {/* 🔔 Notification Icon */}
-            <Link to="/notifications" className="relative p-2 text-slate-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 group">
-              <span className="text-xl group-hover:scale-110 inline-block transition-transform">🔔</span>
-              {unreadCount > 0 && (
-                <span className="absolute top-0 right-0 flex h-5 w-5">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-5 w-5 bg-red-600 text-[10px] font-bold text-white items-center justify-center border-2 border-gray-900">
-                    {unreadCount > 9 ? '9+' : unreadCount}
-                  </span>
-                </span>
-              )}
+    <nav className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 sticky top-0 z-50 transition-colors duration-500">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="flex justify-between h-16">
+          <div className="flex items-center">
+            <Link to="/" className="flex-shrink-0 flex items-center gap-2" onClick={closeMenu}>
+              <span className="text-2xl">🎬</span>
+              <span className="font-bold text-xl bg-clip-text text-transparent bg-gradient-to-r from-rose-500 to-orange-500">
+                CineCircle
+              </span>
             </Link>
-
-            {/* 🌓 Theme Toggle */}
-            <button 
-              onClick={toggleTheme}
-              className="p-2 rounded-full hover:bg-slate-200 dark:hover:bg-slate-800 transition-all text-xl shadow-inner relative h-10 w-10 flex items-center justify-center overflow-hidden"
-              title={theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
-            >
-              <AnimatePresence mode="wait" initial={false}>
-                <motion.span
-                  key={theme}
-                  initial={{ y: -20, opacity: 0, rotate: -45 }}
-                  animate={{ y: 0, opacity: 1, rotate: 0 }}
-                  exit={{ y: 20, opacity: 0, rotate: 45 }}
-                  transition={{ duration: 0.2, ease: "easeInOut" }}
+            <div className="hidden md:ml-8 md:flex md:space-x-4">
+              {navLinks.map((link) => (
+                <NavLink
+                  key={link.name}
+                  to={link.path}
+                  className={({ isActive }) =>
+                    `px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                      isActive
+                        ? "text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/20"
+                        : "text-slate-600 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-indigo-400"
+                    }`
+                  }
                 >
-                  {theme === 'dark' ? '☀️' : '🌙'}
-                </motion.span>
-              </AnimatePresence>
+                  {link.name}
+                </NavLink>
+              ))}
+            </div>
+          </div>
+
+          <div className="hidden md:flex items-center gap-2 lg:gap-4">
+            <button
+              onClick={toggleTheme}
+              className="p-2 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:text-indigo-600 transition-colors"
+              title={theme === "light" ? "Switch to Dark Mode" : "Switch to Light Mode"}
+            >
+              {theme === "light" ? "🌙" : "☀️"}
             </button>
 
-            <Link to="/profile" className="w-10 h-10 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white font-bold border-2 border-slate-200 dark:border-slate-700 hover:border-rose-500 transition-all overflow-hidden">
-              {user.avatar ? (
-                <img 
-                  src={(user.avatar.startsWith('http') || user.avatar.startsWith('data:')) ? user.avatar : `http://localhost:5000${user.avatar.startsWith('/') ? '' : '/'}${user.avatar}`} 
-                  alt={user.name} 
-                  className="w-full h-full object-cover" 
-                  onError={(e) => { e.target.onerror = null; e.target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name)}&background=random`; }}
-                />
-              ) : (
-                user.name?.charAt(0).toUpperCase()
-              )}
-            </Link>
-            
+            {user ? (
+              <>
+                <Link to="/notifications" className="relative p-2 text-slate-500 hover:text-indigo-600 transition-colors">
+                  <span>🔔</span>
+                  {unreadCount > 0 && (
+                    <span className="absolute top-0 right-0 block h-4 w-4 rounded-full bg-rose-500 text-white text-[10px] font-bold flex items-center justify-center ring-2 ring-white dark:ring-slate-900">
+                      {unreadCount}
+                    </span>
+                  )}
+                </Link>
+                <Link to="/profile" className="flex items-center gap-2 group">
+                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-500 to-indigo-500 flex items-center justify-center text-white font-bold text-sm overflow-hidden">
+                    {user.avatar ? (
+                      <img src={user.avatar} alt={user.name} className="w-full h-full object-cover" />
+                    ) : (
+                      user.name.charAt(0).toUpperCase()
+                    )}
+                  </div>
+                  <span className="text-sm font-medium text-slate-700 dark:text-slate-200 group-hover:text-indigo-600 transition-colors">
+                    {user.name}
+                  </span>
+                </Link>
+                <button
+                  onClick={logout}
+                  className="text-sm font-medium text-slate-500 hover:text-rose-500 transition-colors"
+                >
+                  Logout
+                </button>
+              </>
+            ) : (
+              <Link
+                to="/login"
+                className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm font-bold transition-all shadow-md"
+              >
+                Login
+              </Link>
+            )}
+          </div>
+
+          {/* Mobile menu button */}
+          <div className="flex items-center md:hidden">
             <button
-              onClick={handleLogout}
-              className="bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 px-4 py-2 rounded-lg text-sm font-bold transition-all border border-slate-200 dark:border-slate-700"
+              onClick={toggleMenu}
+              className="inline-flex items-center justify-center p-2 rounded-md text-slate-500 hover:text-indigo-600 hover:bg-slate-100 dark:hover:bg-slate-800 focus:outline-none transition-colors"
             >
-              Logout
+              <span className="sr-only">Open main menu</span>
+              {isOpen ? <span className="text-2xl">✕</span> : <span className="text-2xl">☰</span>}
             </button>
-          </>
-        ) : (
-          <>
-            <Link to="/login" className="text-slate-600 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 font-medium">Login</Link>
-            <Link to="/register" className="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2 rounded-lg font-bold transition-all shadow-lg">
-              Join Now
-            </Link>
-          </>
-        )}
+          </div>
+        </div>
+      </div>
+
+      {/* Mobile menu */}
+      <div className={`${isOpen ? "block" : "hidden"} md:hidden bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 animate-fade-in`}>
+        <div className="px-2 pt-2 pb-3 space-y-1 sm:px-3">
+          {navLinks.map((link) => (
+            <NavLink
+              key={link.name}
+              to={link.path}
+              onClick={closeMenu}
+              className={({ isActive }) =>
+                `block px-3 py-2 rounded-md text-base font-medium ${
+                  isActive
+                    ? "text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/20"
+                    : "text-slate-600 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-indigo-400"
+                }`
+              }
+            >
+              {link.name}
+            </NavLink>
+          ))}
+          <button
+            onClick={toggleTheme}
+            className="flex items-center gap-2 w-full text-left px-3 py-2 rounded-md text-base font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+          >
+            <span className="text-lg">{theme === "light" ? "🌙" : "☀️"}</span>
+            {theme === "light" ? "Dark Mode" : "Light Mode"}
+          </button>
+          {user && (
+            <>
+              <NavLink to="/notifications" onClick={closeMenu} className="block px-3 py-2 rounded-md text-base font-medium text-slate-600 dark:text-slate-300">
+                Notifications {unreadCount > 0 && `(${unreadCount})`}
+              </NavLink>
+              <NavLink to="/profile" onClick={closeMenu} className="block px-3 py-2 rounded-md text-base font-medium text-slate-600 dark:text-slate-300">
+                Profile
+              </NavLink>
+              <button onClick={() => { logout(); closeMenu(); }} className="block w-full text-left px-3 py-2 rounded-md text-base font-medium text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/10">
+                Logout
+              </button>
+            </>
+          )}
+        </div>
       </div>
     </nav>
   );

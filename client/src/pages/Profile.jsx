@@ -37,9 +37,9 @@ const Profile = () => {
   };
 
   return (
-    <div className="min-h-screen bg-transparent text-slate-900 dark:text-slate-100 p-8 transition-all duration-500 ease-in-out">
+    <div className="min-h-screen bg-transparent text-slate-900 dark:text-slate-100 p-4 md:p-8 transition-all duration-500 ease-in-out">
       <div className="max-w-3xl mx-auto">
-        <h1 className="text-4xl font-extrabold mb-10 border-b border-gray-200 dark:border-gray-700 pb-4 flex items-center">
+        <h1 className="text-3xl md:text-4xl font-extrabold mb-10 border-b border-gray-200 dark:border-gray-700 pb-4 flex items-center">
           <span className="mr-3">👤</span> {isOwnProfile ? "My Profile" : "User Profile"}
         </h1>
 
@@ -52,7 +52,7 @@ const Profile = () => {
             {/* Banner */}
             <div className="h-32 bg-gradient-to-r from-purple-600 to-blue-600"></div>
             
-            <div className="px-8 pb-8">
+            <div className="px-4 md:px-8 pb-8">
               <div className="relative flex justify-between items-end -mt-12 mb-6">
                 {/* Avatar */}
                 <div className="w-24 h-24 rounded-full bg-white dark:bg-gray-900 p-1">
