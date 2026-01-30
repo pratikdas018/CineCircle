@@ -46,11 +46,6 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
-// 🧪 Test Route
-app.get("/", (req, res) => {
-  res.send("🎬 CineCircle API is running...");
-});
-
 // 🛣️ API Routes
 app.use("/api/auth", authRoutes);
 app.use("/api/users", userRoutes);
@@ -63,6 +58,20 @@ app.use("/api/reminders", reminderRoutes);
 app.use("/api/streaming", streamingRoutes);
 app.use("/api/search", searchRoutes);
 app.use("/api/notifications", notificationRoutes);
+
+// 🚀 Production Setup: Serve Frontend
+if (process.env.NODE_ENV === "production") {
+  // Set static folder
+  app.use(express.static(path.join(__dirname, "../client/dist")));
+
+  app.get("*", (req, res) => {
+    res.sendFile(path.resolve(__dirname, "../client", "dist", "index.html"));
+  });
+} else {
+  app.get("/", (req, res) => {
+    res.send("🎬 CineCircle API is running in development mode...");
+  });
+}
 
 // ================= SOCKET.IO =================
 const io = new Server(server, {
