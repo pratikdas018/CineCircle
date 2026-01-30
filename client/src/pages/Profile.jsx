@@ -59,7 +59,7 @@ const Profile = () => {
                   <div className="w-full h-full rounded-full bg-gradient-to-br from-gray-700 to-gray-600 flex items-center justify-center text-3xl font-bold text-white shadow-inner overflow-hidden">
                     {profile.avatar ? (
                       <img 
-                        src={(profile.avatar.startsWith('http') || profile.avatar.startsWith('data:')) ? profile.avatar : `http://localhost:5000${profile.avatar.startsWith('/') ? '' : '/'}${profile.avatar}`} 
+                        src={(profile.avatar.startsWith('http') || profile.avatar.startsWith('data:')) ? profile.avatar : `${import.meta.env.VITE_API_URL || ''}${profile.avatar.startsWith('/') ? '' : '/'}${profile.avatar}`} 
                         alt={profile.name} 
                         className="w-full h-full object-cover" 
                         onError={(e) => { e.target.onerror = null; e.target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(profile.name)}&background=random`; }}

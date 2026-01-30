@@ -115,7 +115,7 @@ const Notifications = () => {
                     <div className="w-12 h-12 rounded-full bg-gradient-to-br from-red-500 to-orange-600 flex items-center justify-center text-white font-bold text-xl shadow-lg overflow-hidden">
                       {n.sender?.avatar ? (
                         <img 
-                          src={(n.sender.avatar.startsWith('http') || n.sender.avatar.startsWith('data:')) ? n.sender.avatar : `http://localhost:5000${n.sender.avatar.startsWith('/') ? '' : '/'}${n.sender.avatar}`} 
+                          src={(n.sender.avatar.startsWith('http') || n.sender.avatar.startsWith('data:')) ? n.sender.avatar : `${import.meta.env.VITE_API_URL || ''}${n.sender.avatar.startsWith('/') ? '' : '/'}${n.sender.avatar}`} 
                           alt={n.sender.name} 
                           className="w-full h-full object-cover" 
                           onError={(e) => { e.target.onerror = null; e.target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(n.sender?.name || 'User')}&background=random`; }}
