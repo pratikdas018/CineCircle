@@ -339,11 +339,11 @@ const ReviewSection = ({ movieId, movieTitle, onReviewAdded, onStatsUpdate, filt
               {review.image && (
                 <div className="mt-4">
                   <img
-                    src={`http://localhost:5000${review.image}`}
+                    src={`${import.meta.env.VITE_API_URL || ''}${review.image}`}
                     alt="Review attachment"
                     className="rounded-lg max-h-64 object-cover border border-gray-600 cursor-pointer hover:opacity-90 transition-opacity"
                     onClick={() =>
-                      setSelectedImage(`http://localhost:5000${review.image}`)
+                      setSelectedImage(`${import.meta.env.VITE_API_URL || ''}${review.image}`)
                     }
                   />
                 </div>
