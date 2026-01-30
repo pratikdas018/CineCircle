@@ -76,8 +76,8 @@ export const getFriendsReviews = async (req, res) => {
 
     const user = await User.findById(req.user._id);
     const reviews = await Review.find({ user: { $in: user.friends } })
-      .populate("user", "name")
-      .populate("comments.user", "name")
+      .populate("user", "name avatar")
+      .populate("comments.user", "name avatar")
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit);
@@ -108,7 +108,7 @@ export const deleteComment = async (req, res) => {
     comment.deleteOne();
     await review.save();
 
-    const updatedReview = await Review.findById(review._id).populate("user", "name").populate("comments.user", "name");
+    const updatedReview = await Review.findById(review._id).populate("user", "name avatar").populate("comments.user", "name avatar");
     res.json(updatedReview);
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -185,7 +185,7 @@ export const addComment = async (req, res) => {
     }
 
     // Populate user info for the new comment before sending back
-    const updatedReview = await Review.findById(review._id).populate("user", "name").populate("comments.user", "name");
+    const updatedReview = await Review.findById(review._id).populate("user", "name avatar").populate("comments.user", "name avatar");
     res.json({ ...updatedReview.toObject(), mentionedUsers });
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -243,7 +243,7 @@ export const updateComment = async (req, res) => {
       });
     }
 
-    const updatedReview = await Review.findById(review._id).populate("user", "name").populate("comments.user", "name");
+    const updatedReview = await Review.findById(review._id).populate("user", "name avatar").populate("comments.user", "name avatar");
     res.json({ ...updatedReview.toObject(), mentionedUsers });
   } catch (error) {
     res.status(500).json({ message: error.message });

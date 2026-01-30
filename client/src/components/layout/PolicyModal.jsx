@@ -26,14 +26,14 @@ const PolicyModal = ({ activePolicy, onClose }) => {
       onClick={onClose}
     >
       <div 
-        className="bg-gray-900 border border-gray-700 rounded-3xl p-8 max-w-md w-full shadow-2xl transform transition-all"
+        className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-3xl p-8 max-w-md w-full shadow-2xl transform transition-all"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="text-4xl mb-4">{policy.icon}</div>
-        <h3 className="text-2xl font-bold text-white mb-2">{policy.title}</h3>
+        <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">{policy.title}</h3>
 
         {isTerms ? (
-          <div className="relative h-64 overflow-hidden mb-8 [perspective:400px] border-y border-gray-800 bg-black/20 rounded-xl">
+          <div className="relative h-64 overflow-hidden mb-8 [perspective:400px] border-y border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-black/20 rounded-xl">
             <motion.div 
               initial={{ y: "100%", opacity: 0 }}
               animate={{ y: "-150%", opacity: [0, 1, 1, 0] }}
@@ -44,7 +44,7 @@ const PolicyModal = ({ activePolicy, onClose }) => {
             </motion.div>
           </div>
         ) : (
-          <p className="text-gray-400 leading-relaxed mb-8">
+          <p className="text-gray-600 dark:text-gray-400 leading-relaxed mb-8">
             {policy.content}
           </p>
         )}

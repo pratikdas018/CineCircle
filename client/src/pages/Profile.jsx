@@ -37,9 +37,9 @@ const Profile = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 to-black text-white p-8">
+    <div className="min-h-screen bg-transparent text-slate-900 dark:text-slate-100 p-8 transition-all duration-500 ease-in-out">
       <div className="max-w-3xl mx-auto">
-        <h1 className="text-4xl font-extrabold mb-10 border-b border-gray-700 pb-4 flex items-center">
+        <h1 className="text-4xl font-extrabold mb-10 border-b border-gray-200 dark:border-gray-700 pb-4 flex items-center">
           <span className="mr-3">👤</span> {isOwnProfile ? "My Profile" : "User Profile"}
         </h1>
 
@@ -48,18 +48,18 @@ const Profile = () => {
             <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-purple-500"></div>
           </div>
         ) : profile ? (
-          <div className="bg-gray-800 rounded-2xl shadow-2xl overflow-hidden border border-gray-700">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 overflow-hidden transition-all duration-500">
             {/* Banner */}
             <div className="h-32 bg-gradient-to-r from-purple-600 to-blue-600"></div>
             
             <div className="px-8 pb-8">
               <div className="relative flex justify-between items-end -mt-12 mb-6">
                 {/* Avatar */}
-                <div className="w-24 h-24 rounded-full bg-gray-900 p-1">
+                <div className="w-24 h-24 rounded-full bg-white dark:bg-gray-900 p-1">
                   <div className="w-full h-full rounded-full bg-gradient-to-br from-gray-700 to-gray-600 flex items-center justify-center text-3xl font-bold text-white shadow-inner overflow-hidden">
                     {profile.avatar ? (
                       <img 
-                        src={profile.avatar} 
+                        src={(profile.avatar.startsWith('http') || profile.avatar.startsWith('data:')) ? profile.avatar : `http://localhost:5000${profile.avatar.startsWith('/') ? '' : '/'}${profile.avatar}`} 
                         alt={profile.name} 
                         className="w-full h-full object-cover" 
                         onError={(e) => { e.target.onerror = null; e.target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(profile.name)}&background=random`; }}
@@ -73,7 +73,7 @@ const Profile = () => {
                   {isOwnProfile && !isEditing ? (
                     <button
                       onClick={() => setIsEditing(true)}
-                      className="bg-gray-700 hover:bg-gray-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors mb-2 shadow-md"
+                      className="bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors mb-2 shadow-md border border-gray-200 dark:border-transparent"
                     >
                       Edit Profile
                     </button>
@@ -105,29 +105,29 @@ const Profile = () => {
                     type="text"
                     value={formData.name}
                     onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                    className="w-full bg-gray-700 border border-gray-600 text-white px-4 py-2 rounded-lg focus:outline-none focus:border-blue-500 transition-colors"
+                    className="w-full bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white px-4 py-2 rounded-lg focus:outline-none focus:border-blue-500 transition-colors"
                     placeholder="Display Name"
                   />
                   <input
                     type="text"
                     value={formData.avatar}
                     onChange={(e) => setFormData({ ...formData, avatar: e.target.value })}
-                    className="w-full bg-gray-700 border border-gray-600 text-white px-4 py-2 rounded-lg focus:outline-none focus:border-blue-500 transition-colors"
+                    className="w-full bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white px-4 py-2 rounded-lg focus:outline-none focus:border-blue-500 transition-colors"
                     placeholder="Avatar URL"
                   />
                 </div>
               ) : (
-                <h2 className="text-3xl font-bold text-white mb-1">{profile.name}</h2>
+                <h2 className="text-3xl font-bold text-slate-900 dark:text-white mb-1">{profile.name}</h2>
               )}
               {isOwnProfile && <p className="text-gray-400 mb-8">{profile.email}</p>}
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="bg-gray-700/30 p-6 rounded-xl border border-gray-600/50 flex items-center">
+                <div className="bg-gray-50 dark:bg-gray-700/30 p-6 rounded-xl border border-gray-200 dark:border-gray-600/50 flex items-center">
                   <div className="p-3 bg-blue-500/20 rounded-lg mr-4">
                     <span className="text-2xl">🤝</span>
                   </div>
                   <div>
-                    <span className="block text-2xl font-bold text-white">{profile.friends?.length || 0}</span>
+                    <span className="block text-2xl font-bold text-gray-900 dark:text-white">{profile.friends?.length || 0}</span>
                     <span className="text-sm text-gray-400 uppercase tracking-wide">Friends</span>
                   </div>
                 </div>
@@ -135,7 +135,7 @@ const Profile = () => {
             </div>
           </div>
         ) : (
-          <div className="text-center py-20 bg-gray-800 rounded-xl border border-gray-700">
+          <div className="text-center py-20 bg-white dark:bg-slate-900/40 rounded-xl border border-slate-200 dark:border-slate-800">
             <p className="text-gray-400">Failed to load profile data.</p>
           </div>
         )}

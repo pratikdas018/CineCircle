@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import api from "../services/api";
+import PageTransition from "../components/layout/PageTransition";
 
 const Watchlist = () => {
   const [movies, setMovies] = useState([]);
@@ -23,9 +24,10 @@ const Watchlist = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 to-black text-white p-8">
+    <PageTransition>
+      <div className="min-h-screen bg-transparent text-slate-900 dark:text-slate-100 p-8 transition-all duration-500 ease-in-out">
       <div className="max-w-7xl mx-auto">
-        <h1 className="text-4xl font-extrabold mb-10 border-b border-gray-700 pb-4 flex items-center">
+        <h1 className="text-4xl font-extrabold mb-10 border-b border-slate-200 dark:border-slate-800 pb-4 flex items-center">
           <span className="mr-3 text-yellow-400 drop-shadow-md">⭐</span> My Watchlist
         </h1>
 
@@ -41,14 +43,14 @@ const Watchlist = () => {
             <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-yellow-400"></div>
           </div>
         ) : movies.length === 0 ? (
-          <div className="text-center py-32 bg-gray-800/30 rounded-3xl border border-gray-700/50 border-dashed">
-            <p className="text-3xl text-gray-500 font-light">Your watchlist is empty.</p>
-            <p className="text-gray-400 mt-4 text-lg">Go explore and add some movies to track!</p>
+          <div className="text-center py-32 bg-white dark:bg-slate-900/30 rounded-3xl border border-slate-200 dark:border-slate-800 border-dashed">
+            <p className="text-3xl text-slate-500 font-light">Your watchlist is empty.</p>
+            <p className="text-slate-400 mt-4 text-lg">Go explore and add some movies to track!</p>
           </div>
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-8">
             {movies.map((movie) => (
-              <div key={movie.movieId} className="bg-gray-800 rounded-xl overflow-hidden shadow-lg hover:shadow-2xl transition-all duration-300 group relative border border-gray-700">
+              <div key={movie.movieId} className="bg-white dark:bg-slate-900 rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-all duration-300 group relative border border-slate-200 dark:border-slate-800">
                 <div className="relative aspect-[2/3]">
                   <img
                     src={movie.posterPath && movie.posterPath !== "N/A" ? movie.posterPath : "https://placehold.co/500x750?text=No+Image"}
@@ -58,21 +60,22 @@ const Watchlist = () => {
                   <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center backdrop-blur-sm">
                     <button
                       onClick={() => removeMovie(movie.movieId)}
-                      className="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-6 rounded-full shadow-lg transform hover:scale-105 transition-all"
+                      className="bg-rose-600 hover:bg-rose-700 text-white font-bold py-2 px-6 rounded-full shadow-lg transform hover:scale-105 transition-all"
                     >
                       Remove
                     </button>
                   </div>
                 </div>
                 <div className="p-4">
-                  <h3 className="font-semibold truncate text-center text-gray-100" title={movie.title}>{movie.title}</h3>
+                  <h3 className="font-semibold truncate text-center text-gray-900 dark:text-gray-100" title={movie.title}>{movie.title}</h3>
                 </div>
               </div>
             ))}
           </div>
         )}
       </div>
-    </div>
+      </div>
+    </PageTransition>
   );
 };
 
