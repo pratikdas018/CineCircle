@@ -1,4 +1,4 @@
-import nodemailer from "nodemailer";
+import axios from "axios";
 import dotenv from "dotenv";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -8,44 +8,33 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.join(__dirname, "../.env") });
 
 const testBrevoConnection = async () => {
-  console.log("🔍 Starting Brevo SMTP Verification...");
-  console.log(`📧 Testing with User: ${process.env.EMAIL_USER}`);
-
-  const transporter = nodemailer.createTransport({
-    host: "smtp-relay.brevo.com",
-    port: 465,
-    secure: true,
-    auth: {
-      user: process.env.EMAIL_USER,
-      pass: process.env.EMAIL_PASS,
-    },
-    connectionTimeout: 20000,
-    greetingTimeout: 20000,
-    socketTimeout: 20000,
-  });
+  console.log("🔍 Starting Brevo API Verification...");
+  console.log(`📧 Testing with Sender: ${process.env.EMAIL_FROM}`);
 
   try {
-    // 1. Verify connection configuration
-    console.log("⏳ Verifying connection...");
-    await transporter.verify();
-    console.log("✅ Connection established successfully!");
-
-    // 2. Attempt to send a test email to yourself
     console.log("⏳ Sending test email...");
-    const info = await transporter.sendMail({
-      from: `"CineCircle Test" <${process.env.EMAIL_FROM}>`,
-      to: "your-personal-email@gmail.com", // Change this to your actual inbox
-      subject: "Brevo SMTP Test Email",
-      text: "This is a test email to verify your Brevo SMTP settings. If you received this, your credentials and network connection are working!",
-    });
+    const response = await axios.post(
+      "https://api.brevo.com/v3/smtp/email",
+      {
+        sender: { name: "CineCircle Test", email: process.env.EMAIL_FROM },
+        to: [{ email: process.env.EMAIL_FROM }], // Send to yourself
+        subject: "Brevo API Test Email",
+        textContent: "This is a test email to verify your Brevo API settings.",
+      },
+      {
+        headers: {
+          "api-key": process.env.EMAIL_PASS,
+          "Content-Type": "application/json",
+        },
+      }
+    );
 
-    console.log("✅ Test email sent successfully! Message ID:", info.messageId);
+    console.log("✅ Test email sent successfully! Message ID:", response.data.messageId);
   } catch (error) {
-    console.error("❌ SMTP Verification Failed:", error.message);
+    console.error("❌ API Verification Failed:", error.response?.data || error.message);
     console.log("\n💡 Troubleshooting Tips:");
-    console.log("1. Ensure EMAIL_PASS is your Brevo SMTP Key, NOT your account password.");
-    console.log("2. Check if your Brevo account is activated for SMTP.");
-    console.log("3. If on Render, ensure you aren't hitting a firewall block (Port 587 is usually open).");
+    console.log("1. Ensure EMAIL_PASS is your Brevo API Key.");
+    console.log("2. Ensure EMAIL_FROM is a verified sender in Brevo.");
   }
 };
 

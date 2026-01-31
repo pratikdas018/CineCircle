@@ -1,44 +1,18 @@
-import nodemailer from "nodemailer";
-
-let transporter;
-
-const getTransporter = () => {
-  if (transporter) return transporter;
-
-  if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS || !process.env.EMAIL_FROM) {
-    console.error("❌ Email configuration missing: EMAIL_USER, EMAIL_PASS, or EMAIL_FROM not set.");
-    return null;
-  }
-
-  transporter = nodemailer.createTransport({
-    host: "smtp-relay.brevo.com",
-    port: 465,
-    secure: true, // Use SSL/TLS for port 465
-    auth: {
-      user: process.env.EMAIL_USER,
-      pass: process.env.EMAIL_PASS,
-    },
-    pool: true,
-    maxConnections: 5,
-    maxMessages: 100,
-    connectionTimeout: 20000, // 20 seconds
-    greetingTimeout: 20000,
-    socketTimeout: 30000,
-  });
-
-  return transporter;
-};
+import axios from "axios";
 
 export const sendEmail = async (to, subject, text) => {
   try {
-    const transporter = getTransporter();
-    if (!transporter) throw new Error("Email service not configured");
+    if (!process.env.EMAIL_PASS || !process.env.EMAIL_FROM) {
+      throw new Error("Email configuration missing: EMAIL_PASS or EMAIL_FROM not set.");
+    }
 
-    const mailOptions = {
-      from: `"CineCircle Support" <${process.env.EMAIL_FROM}>`,
-      to,
-      subject,
-      html: `
+    const response = await axios.post(
+      "https://api.brevo.com/v3/smtp/email",
+      {
+        sender: { name: "CineCircle Support", email: process.env.EMAIL_FROM },
+        to: [{ email: to }],
+        subject: subject,
+        htmlContent: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; border: 1px solid #ddd; padding: 20px;">
           <h2 style="color: #333;">Email Verification</h2>
           <p>Thank you for registering with CineCircle. Please use the following OTP to verify your email address. This code is valid for 10 minutes.</p>
@@ -46,36 +20,48 @@ export const sendEmail = async (to, subject, text) => {
           <p>If you did not request this, please ignore this email.</p>
         </div>
       `,
-    };
+      },
+      {
+        headers: {
+          "api-key": process.env.EMAIL_PASS,
+          "Content-Type": "application/json",
+        },
+      }
+    );
 
-    const info = await transporter.sendMail(mailOptions);
-    console.log("📧 Email sent successfully:", info.messageId);
+    console.log("📧 Email sent successfully via API:", response.data.messageId);
   } catch (error) {
-    console.error("❌ Email sending failed:", error.message);
+    console.error("❌ Email sending failed:", error.response?.data || error.message);
     throw new Error("Email could not be sent");
   }
 };
 
 export const sendReminderEmail = async (to, movieTitle) => {
   try {
-    const transporter = getTransporter();
-    if (!transporter) return;
+    if (!process.env.EMAIL_PASS || !process.env.EMAIL_FROM) return;
 
-    const mailOptions = {
-      from: `"CineCircle Support" <${process.env.EMAIL_FROM}>`,
-      to,
-      subject: `Movie Reminder: ${movieTitle}`,
-      html: `
+    await axios.post(
+      "https://api.brevo.com/v3/smtp/email",
+      {
+        sender: { name: "CineCircle Support", email: process.env.EMAIL_FROM },
+        to: [{ email: to }],
+        subject: `Movie Reminder: ${movieTitle}`,
+        htmlContent: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; border: 1px solid #ddd; padding: 20px;">
           <h2 style="color: #333;">Don't Forget!</h2>
           <p>This is a reminder to watch <strong>${movieTitle}</strong>.</p>
           <p>Enjoy your movie!</p>
         </div>
       `,
-    };
-
-    await transporter.sendMail(mailOptions);
+      },
+      {
+        headers: {
+          "api-key": process.env.EMAIL_PASS,
+          "Content-Type": "application/json",
+        },
+      }
+    );
   } catch (error) {
-    console.error("Reminder email sending failed:", error);
+    console.error("Reminder email sending failed:", error.response?.data || error.message);
   }
 };
