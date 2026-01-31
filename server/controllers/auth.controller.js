@@ -2,6 +2,7 @@ import User from "../models/User.js";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import axios from "axios";
+import crypto from "crypto";
 import { sendEmail } from "../utils/sendEmail.js";
 
 // Generate JWT
@@ -26,8 +27,8 @@ export const registerUser = async (req, res) => {
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, salt);
 
-    // Generate 6-digit OTP
-    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    // Generate secure 6-digit OTP
+    const otp = crypto.randomInt(100000, 999999).toString();
     const otpExpires = Date.now() + 10 * 60 * 1000; // 10 minutes expiry
 
     const user = await User.create({
@@ -39,11 +40,7 @@ export const registerUser = async (req, res) => {
       isVerified: false,
     });
 
-    try {
-      await sendEmail(user.email, "Verify your CineCircle Account", otp);
-    } catch (emailErr) {
-      console.error("❌ Registration email failed (Timeout):", emailErr.message);
-    }
+    await sendEmail(user.email, "Verify your CineCircle Account", otp);
 
     res.status(201).json({
       message: "Registration successful. Please check your email for the OTP.",
@@ -90,7 +87,7 @@ export const resendOTP = async (req, res) => {
 
     if (!user) return res.status(404).json({ message: "User not found" });
 
-    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const otp = crypto.randomInt(100000, 999999).toString();
     user.otp = otp;
     user.otpExpires = Date.now() + 10 * 60 * 1000;
     await user.save();
@@ -161,16 +158,12 @@ export const loginUser = async (req, res) => {
 
     if (!user.isVerified) {
       // Generate a fresh OTP so the user can verify immediately
-      const otp = Math.floor(100000 + Math.random() * 900000).toString();
+      const otp = crypto.randomInt(100000, 999999).toString();
       user.otp = otp;
       user.otpExpires = Date.now() + 10 * 60 * 1000; // 10 minutes
       await user.save();
 
-      try {
-        await sendEmail(user.email, "Verify your CineCircle Account", otp);
-      } catch (emailErr) {
-        console.error("❌ Login verification email failed (Timeout):", emailErr.message);
-      }
+      await sendEmail(user.email, "Verify your CineCircle Account", otp);
 
       return res.status(401).json({ 
         message: "Please verify your email. A new OTP has been sent to your inbox.",

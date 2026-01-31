@@ -5,20 +5,25 @@ let transporter;
 const getTransporter = () => {
   if (transporter) return transporter;
 
-  if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
-    console.error("❌ Email configuration missing: EMAIL_USER or EMAIL_PASS not set.");
+  if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS || !process.env.EMAIL_FROM) {
+    console.error("❌ Email configuration missing: EMAIL_USER, EMAIL_PASS, or EMAIL_FROM not set.");
     return null;
   }
 
   transporter = nodemailer.createTransport({
-    service: "gmail",
+    host: "smtp-relay.brevo.com",
+    port: 587,
+    secure: false, // Use STARTTLS for port 587
     auth: {
       user: process.env.EMAIL_USER,
       pass: process.env.EMAIL_PASS,
     },
-    pool: true, // Use connection pooling for better performance
-    connectionTimeout: 30000, // 30 seconds
-    greetingTimeout: 30000,   // 30 seconds
+    pool: true,
+    maxConnections: 5,
+    maxMessages: 100,
+    connectionTimeout: 10000, // 10 seconds
+    greetingTimeout: 10000,
+    socketTimeout: 15000,
   });
 
   return transporter;
@@ -30,7 +35,7 @@ export const sendEmail = async (to, subject, text) => {
     if (!transporter) throw new Error("Email service not configured");
 
     const mailOptions = {
-      from: `"CineCircle Support" <${process.env.EMAIL_USER}>`,
+      from: `"CineCircle Support" <${process.env.EMAIL_FROM}>`,
       to,
       subject,
       html: `
@@ -43,7 +48,8 @@ export const sendEmail = async (to, subject, text) => {
       `,
     };
 
-    await transporter.sendMail(mailOptions);
+    const info = await transporter.sendMail(mailOptions);
+    console.log("📧 Email sent successfully:", info.messageId);
   } catch (error) {
     console.error("❌ Email sending failed:", error.message);
     throw new Error("Email could not be sent");
@@ -56,7 +62,7 @@ export const sendReminderEmail = async (to, movieTitle) => {
     if (!transporter) return;
 
     const mailOptions = {
-      from: `"CineCircle Support" <${process.env.EMAIL_USER}>`,
+      from: `"CineCircle Support" <${process.env.EMAIL_FROM}>`,
       to,
       subject: `Movie Reminder: ${movieTitle}`,
       html: `
