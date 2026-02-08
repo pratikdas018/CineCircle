@@ -7,7 +7,7 @@ import Notification from "../models/Notification.js";
 // ➕ Add or Update Review
 export const addReview = async (req, res) => {
   try {
-    const { movieId, movieTitle, rating, comment } = req.body;
+    const { movieId, movieTitle, rating, comment, maxRating } = req.body;
     const image = req.file ? `/uploads/${req.file.filename}` : null;
 
     let review = await Review.findOne({
@@ -21,6 +21,7 @@ export const addReview = async (req, res) => {
       review.comment = comment;
       if (movieTitle) review.movieTitle = movieTitle;
       if (image) review.image = image;
+      if (maxRating) review.maxRating = maxRating;
       await review.save();
       return res.json(review);
     }
@@ -30,6 +31,7 @@ export const addReview = async (req, res) => {
       movieId,
       movieTitle,
       rating,
+      maxRating: maxRating || 5,
       comment,
       image,
     });

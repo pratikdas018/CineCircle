@@ -14,7 +14,7 @@ const MovieDetails = () => {
   const [isTrailerOpen, setIsTrailerOpen] = useState(false);
   const [isInWatchlist, setIsInWatchlist] = useState(false);
   const [cast, setCast] = useState([]);
-  const [ratingStats, setRatingStats] = useState({ avg: 0, count: 0, distribution: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 } });
+  const [ratingStats, setRatingStats] = useState({ avg: 0, count: 0, distribution: {} });
   const [selectedRating, setSelectedRating] = useState(null);
   const [omdbData, setOmdbData] = useState(null);
 
@@ -73,6 +73,9 @@ const MovieDetails = () => {
     );
   }
 
+  // Determine max rating based on movie data (IMDb usually uses 10, others might use 5)
+  const maxRating = movie.imdbRating && movie.imdbRating !== "N/A" ? 10 : 5;
+
   return (
     <div className="min-h-screen bg-transparent text-slate-900 dark:text-slate-100 p-4 md:p-8 transition-all duration-500 ease-in-out">
       <div className="max-w-6xl mx-auto">
@@ -125,7 +128,7 @@ const MovieDetails = () => {
                 <span className="flex items-center gap-2 bg-white dark:bg-slate-800 px-3 py-1 rounded-lg text-sm font-medium border border-slate-200 dark:border-slate-700">
                   <span className="text-yellow-400">⭐</span> 
                   <span className="text-slate-900 dark:text-slate-100">{ratingStats.avg}</span>
-                  <span className="text-gray-500">/ 5</span>
+                  <span className="text-gray-500">/ {maxRating}</span>
                   <span className="text-gray-400 ml-1">({ratingStats.count} {ratingStats.count === 1 ? 'review' : 'reviews'})</span>
                 </span>
               )}
@@ -156,7 +159,7 @@ const MovieDetails = () => {
                   )}
                 </div>
                 <div className="space-y-2">
-                  {[5, 4, 3, 2, 1].map((star) => {
+                  {Array.from({ length: maxRating }, (_, i) => maxRating - i).map((star) => {
                     const count = ratingStats.distribution[star] || 0;
                     const percentage = ratingStats.count > 0 ? (count / ratingStats.count) * 100 : 0;
                     return (
@@ -164,7 +167,7 @@ const MovieDetails = () => {
                         key={star} 
                         onClick={() => setSelectedRating(selectedRating === star ? null : star)}
                         className={`flex items-center gap-3 p-1 rounded-lg cursor-pointer transition-all ${selectedRating === star ? 'bg-slate-100 dark:bg-slate-700 ring-1 ring-indigo-500' : 'hover:bg-slate-50 dark:hover:bg-slate-700/50'}`}>
-                        <span className="text-xs font-medium text-gray-400 w-12">{star} Stars</span>
+                        <span className="text-xs font-medium text-gray-400 w-12">{star} {maxRating > 5 ? "Pts" : "Stars"}</span>
                         <div className="flex-1 h-2 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
                           <div className="h-full bg-yellow-500 transition-all duration-500" style={{ width: `${percentage}%` }}></div>
                         </div>
@@ -199,6 +202,7 @@ const MovieDetails = () => {
           onStatsUpdate={setRatingStats} 
           filterRating={selectedRating} 
           currentUserInWatchlist={isInWatchlist}
+          maxRating={maxRating}
         />
 
         <TrailerModal

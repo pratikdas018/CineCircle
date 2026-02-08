@@ -6,11 +6,11 @@ import { formatDistanceToNow } from "date-fns";
 import { Link, useNavigate } from "react-router-dom";
 import MentionWithPreview from "./MentionWithPreview";
 
-const ReviewSection = ({ movieId, movieTitle, onReviewAdded, onStatsUpdate, filterRating, currentUserInWatchlist }) => {
+const ReviewSection = ({ movieId, movieTitle, onReviewAdded, onStatsUpdate, filterRating, currentUserInWatchlist, maxRating = 5 }) => {
   const { user } = useContext(AuthContext);
   const navigate = useNavigate();
   const [reviews, setReviews] = useState([]);
-  const [rating, setRating] = useState(5);
+  const [rating, setRating] = useState(maxRating);
   const [comment, setComment] = useState("");
   const [image, setImage] = useState(null);
   const [preview, setPreview] = useState(null);
@@ -37,6 +37,16 @@ const ReviewSection = ({ movieId, movieTitle, onReviewAdded, onStatsUpdate, filt
   }, []);
 
   useEffect(() => {
+    setRating(maxRating);
+  }, [maxRating, movieId]);
+
+  useEffect(() => {
+    if (!import.meta.env.VITE_API_BASE_URL) {
+      console.warn("⚠️ VITE_API_BASE_URL is not defined in client/.env. Images from the server may not load.");
+    }
+  }, []);
+
+  useEffect(() => {
     api.get(`/api/reviews/${movieId}`).then((res) => setReviews(res.data));
     if (user) {
       api.get("/api/friends").then(res => setFriends(res.data));
@@ -45,7 +55,10 @@ const ReviewSection = ({ movieId, movieTitle, onReviewAdded, onStatsUpdate, filt
 
   useEffect(() => {
     const count = reviews.length;
-    const distribution = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+    const distribution = {};
+    for (let i = 1; i <= maxRating; i++) {
+      distribution[i] = 0;
+    }
     reviews.forEach(r => {
       const val = Math.round(Number(r.rating));
       if (distribution[val] !== undefined) distribution[val]++;
@@ -55,7 +68,7 @@ const ReviewSection = ({ movieId, movieTitle, onReviewAdded, onStatsUpdate, filt
       : 0;
     
     onStatsUpdate?.({ avg, count, distribution });
-  }, [reviews, onStatsUpdate]);
+  }, [reviews, onStatsUpdate, maxRating]);
 
   const handleImageChange = (e) => {
     const file = e.target.files[0];
@@ -153,6 +166,7 @@ const ReviewSection = ({ movieId, movieTitle, onReviewAdded, onStatsUpdate, filt
     formData.append("movieTitle", movieTitle);
     formData.append("rating", rating);
     formData.append("comment", comment);
+    formData.append("maxRating", maxRating);
     if (image) {
       formData.append("image", image);
     }
@@ -210,6 +224,19 @@ const ReviewSection = ({ movieId, movieTitle, onReviewAdded, onStatsUpdate, filt
     }
   };
 
+  const getImageUrl = (imagePath) => {
+    if (!imagePath) return null;
+    if (imagePath.startsWith("http") || imagePath.startsWith("https")) return imagePath;
+
+    const baseUrl = import.meta.env.VITE_API_BASE_URL || "";
+    const normalizedPath = imagePath.replace(/\\/g, "/");
+    const cleanPath = normalizedPath.startsWith("/") ? normalizedPath : `/${normalizedPath}`;
+
+    if (!baseUrl) return cleanPath;
+    const cleanBase = baseUrl.endsWith("/") ? baseUrl.slice(0, -1) : baseUrl;
+    return `${cleanBase}${cleanPath}`;
+  };
+
   return (
     <div className="mt-8">
       {user ? (
@@ -223,11 +250,11 @@ const ReviewSection = ({ movieId, movieTitle, onReviewAdded, onStatsUpdate, filt
           <label className="block text-gray-400 text-sm mb-1">Rating</label>
           <select
             value={rating}
-            onChange={(e) => setRating(e.target.value)}
+            onChange={(e) => setRating(Number(e.target.value))}
             className="bg-gray-900 text-white p-2 rounded border border-gray-600 focus:border-blue-500 outline-none w-full sm:w-auto"
           >
-            {[5, 4, 3, 2, 1].map((r) => (
-              <option key={r} value={r}>{r} Stars</option>
+            {Array.from({ length: maxRating }, (_, i) => maxRating - i).map((r) => (
+              <option key={r} value={r}>{r} {maxRating > 5 ? "Points" : "Stars"}</option>
             ))}
           </select>
         </div>
@@ -344,7 +371,10 @@ const ReviewSection = ({ movieId, movieTitle, onReviewAdded, onStatsUpdate, filt
                 <div className="flex items-center gap-3">
                   <div className="flex items-center bg-gray-700 px-3 py-1 rounded-lg">
                     <span className="text-yellow-400 mr-1">⭐</span>
-                    <span className="font-bold text-white">{review.rating}</span>
+                    <span className="font-bold text-white">
+                      {review.rating}
+                      <span className="text-gray-400 text-xs font-normal ml-0.5">/{review.maxRating || 5}</span>
+                    </span>
                   </div>
 
                   {user && (review.user?._id === user._id || review.user === user._id) && (
@@ -364,11 +394,11 @@ const ReviewSection = ({ movieId, movieTitle, onReviewAdded, onStatsUpdate, filt
               {review.image && (
                 <div className="mt-4">
                   <img
-                    src={`${import.meta.env.VITE_API_URL || ''}${review.image}`}
+                    src={getImageUrl(review.image)}
                     alt="Review attachment"
                     className="rounded-lg max-h-64 object-cover border border-gray-600 cursor-pointer hover:opacity-90 transition-opacity"
                     onClick={() =>
-                      setSelectedImage(`${import.meta.env.VITE_API_URL || ''}${review.image}`)
+                      setSelectedImage(getImageUrl(review.image))
                     }
                   />
                 </div>
