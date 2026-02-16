@@ -57,6 +57,18 @@ const userSchema = new mongoose.Schema(
       type: Date,
       required: false,
     },
+    resetPasswordTokenHash: {
+      type: String,
+      required: false,
+    },
+    resetPasswordExpires: {
+      type: Date,
+      required: false,
+    },
+    resetPasswordLastSentAt: {
+      type: Date,
+      required: false,
+    },
 
     // ✅ Accepted Friends
     friends: [
@@ -78,3 +90,4 @@ const userSchema = new mongoose.Schema(
 );
 
 export default mongoose.model("User", userSchema);
+

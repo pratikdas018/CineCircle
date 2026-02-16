@@ -6,6 +6,8 @@ import {
   googleLogin,
   verifyOTP,
   resendOTP,
+  forgotPassword,
+  resetPassword,
 } from "../controllers/auth.controller.js";
 
 const router = express.Router();
@@ -36,10 +38,28 @@ const resendOTPLimiter = rateLimit({
   legacyHeaders: false,
 });
 
+const forgotPasswordLimiter = rateLimit({
+  windowMs: 10 * 60 * 1000, // 10 minutes
+  max: 6,
+  message: { message: "Too many password reset requests. Please try again after 10 minutes." },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+const resetPasswordLimiter = rateLimit({
+  windowMs: 10 * 60 * 1000, // 10 minutes
+  max: 12,
+  message: { message: "Too many reset attempts. Please try again after 10 minutes." },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
 router.post("/register", authLimiter, registerUser);
 router.post("/login", authLimiter, loginUser);
 router.post("/google", googleLogin);
 router.post("/verify-otp", verifyOTPLimiter, verifyOTP);
 router.post("/resend-otp", resendOTPLimiter, resendOTP);
+router.post("/forgot-password", forgotPasswordLimiter, forgotPassword);
+router.post("/reset-password", resetPasswordLimiter, resetPassword);
 
 export default router;

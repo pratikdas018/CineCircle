@@ -3,6 +3,8 @@ import Home from "./pages/Home";
 import MovieDetails from "./pages/MovieDetails";
 import Login from "./pages/Auth/Login";
 import Register from "./pages/Auth/Register";
+import ForgotPassword from "./pages/Auth/ForgotPassword";
+import ResetPassword from "./pages/Auth/ResetPassword";
 import Watchlist from "./pages/Watchlist";
 import Friends from "./pages/Friends";
 import Chat from "./pages/Chat";
@@ -20,6 +22,8 @@ const AppRoutes = () => (
     <Route path="/movie/:id" element={<MovieDetails />} />
     <Route path="/login" element={<Login />} />
     <Route path="/register" element={<Register />} />
+    <Route path="/forgot-password" element={<ForgotPassword />} />
+    <Route path="/reset-password" element={<ResetPassword />} />
     <Route path="/verify-otp" element={<VerifyOTP />} />
 
     <Route element={<ProtectedRoute />}>

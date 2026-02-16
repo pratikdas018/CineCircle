@@ -3,13 +3,16 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import axios from "axios";
 import crypto from "crypto";
-import { sendEmail } from "../utils/sendEmail.js";
+import { sendEmail, sendPasswordResetEmail } from "../utils/sendEmail.js";
 import { enqueueEmailTask } from "../utils/emailQueue.js";
 
 const OTP_TTL_MS = 10 * 60 * 1000;
 const OTP_RESEND_COOLDOWN_MS = 60 * 1000;
 const OTP_MAX_ATTEMPTS = 5;
 const OTP_LOCK_MS = 15 * 60 * 1000;
+const RESET_PASSWORD_TTL_MS = 15 * 60 * 1000;
+const RESET_PASSWORD_COOLDOWN_MS = 60 * 1000;
+const MIN_PASSWORD_LENGTH = 6;
 
 const normalizeEmail = (email) => String(email || "").trim().toLowerCase();
 
@@ -59,14 +62,22 @@ const ensureAdminRoleFromEmail = (user) => {
 };
 
 const getOtpSecret = () => process.env.OTP_SECRET || process.env.JWT_SECRET || "sceneit_otp_secret";
+const getResetSecret = () =>
+  process.env.RESET_PASSWORD_SECRET || process.env.OTP_SECRET || process.env.JWT_SECRET || "sceneit_reset_secret";
 
 const hashOtp = (email, otp) =>
   crypto
     .createHmac("sha256", getOtpSecret())
     .update(`${normalizeEmail(email)}:${String(otp).trim()}`)
     .digest("hex");
+const hashResetToken = (token) =>
+  crypto
+    .createHmac("sha256", getResetSecret())
+    .update(`reset:${String(token || "").trim()}`)
+    .digest("hex");
 
 const generateOtp = () => crypto.randomInt(100000, 999999).toString();
+const generateResetToken = () => crypto.randomBytes(32).toString("hex");
 
 const clearOtpState = (user) => {
   user.otp = undefined;
@@ -77,6 +88,12 @@ const clearOtpState = (user) => {
   user.otpLastSentAt = undefined;
 };
 
+const clearResetState = (user) => {
+  user.resetPasswordTokenHash = undefined;
+  user.resetPasswordExpires = undefined;
+  user.resetPasswordLastSentAt = undefined;
+};
+
 const setOtpState = (user, otp) => {
   user.otp = undefined;
   user.otpHash = hashOtp(user.email, otp);
@@ -84,6 +101,12 @@ const setOtpState = (user, otp) => {
   user.otpAttempts = 0;
   user.otpLockUntil = undefined;
   user.otpLastSentAt = new Date();
+};
+
+const setResetState = (user, token) => {
+  user.resetPasswordTokenHash = hashResetToken(token);
+  user.resetPasswordExpires = new Date(Date.now() + RESET_PASSWORD_TTL_MS);
+  user.resetPasswordLastSentAt = new Date();
 };
 
 const isOtpLocked = (user) => {
@@ -100,6 +123,12 @@ const canResendOtp = (user) => {
   if (!user?.otpLastSentAt) return true;
   const elapsed = Date.now() - new Date(user.otpLastSentAt).getTime();
   return elapsed >= OTP_RESEND_COOLDOWN_MS;
+};
+
+const canRequestPasswordReset = (user) => {
+  if (!user?.resetPasswordLastSentAt) return true;
+  const elapsed = Date.now() - new Date(user.resetPasswordLastSentAt).getTime();
+  return elapsed >= RESET_PASSWORD_COOLDOWN_MS;
 };
 
 const getResendCooldownSeconds = (user) => {
@@ -128,6 +157,28 @@ const queueOtpEmail = async (email, subject, otp) => {
   await enqueueEmailTask(() => sendEmail(email, subject, otp), {
     retries: 3,
     retryDelayMs: 1500,
+  });
+};
+
+const queueOtpEmailInBackground = (email, subject, otp) => {
+  queueOtpEmail(email, subject, otp).catch((error) => {
+    console.error(`OTP email send failed for ${email}:`, error.message);
+  });
+};
+
+const getClientAppUrl = () =>
+  (process.env.CLIENT_URL || "https://cine-circle-ten.vercel.app").replace(/\/$/, "");
+
+const queuePasswordResetEmail = async (email, resetLink) => {
+  await enqueueEmailTask(() => sendPasswordResetEmail(email, resetLink), {
+    retries: 3,
+    retryDelayMs: 1500,
+  });
+};
+
+const queuePasswordResetEmailInBackground = (email, resetLink) => {
+  queuePasswordResetEmail(email, resetLink).catch((error) => {
+    console.error(`Password reset email send failed for ${email}:`, error.message);
   });
 };
 
@@ -167,14 +218,7 @@ export const registerUser = async (req, res) => {
 
       await userExists.save();
 
-      try {
-        await queueOtpEmail(userExists.email, "CineCircle OTP Verification Code", otp);
-      } catch {
-        return res.status(503).json({
-          message: "Account exists but OTP could not be sent right now. Please try again shortly.",
-          email: userExists.email,
-        });
-      }
+      queueOtpEmailInBackground(userExists.email, "CineCircle OTP Verification Code", otp);
 
       return res.status(200).json({
         message: "Account exists but is unverified. A new OTP has been sent.",
@@ -197,14 +241,7 @@ export const registerUser = async (req, res) => {
     setOtpState(user, otp);
     await user.save();
 
-    try {
-      await queueOtpEmail(user.email, "CineCircle OTP Verification Code", otp);
-    } catch {
-      return res.status(503).json({
-        message: "Account created, but OTP email could not be sent. Please use resend OTP.",
-        email: user.email,
-      });
-    }
+    queueOtpEmailInBackground(user.email, "CineCircle OTP Verification Code", otp);
 
     return res.status(201).json({
       message: "Registration successful. Please check your email for the OTP.",
@@ -300,13 +337,79 @@ export const resendOTP = async (req, res) => {
     setOtpState(user, otp);
     await user.save();
 
-    try {
-      await queueOtpEmail(user.email, "CineCircle OTP Code (Resend)", otp);
-    } catch (error) {
-      console.error("Resend OTP email failed:", error.message);
-    }
+    queueOtpEmailInBackground(user.email, "CineCircle OTP Code (Resend)", otp);
 
     return res.status(200).json({ message: genericSuccessMessage });
+  } catch (error) {
+    return res.status(500).json({ message: error.message });
+  }
+};
+
+export const forgotPassword = async (req, res) => {
+  try {
+    const genericSuccessMessage =
+      "If an account exists with this email, a password reset link has been sent.";
+    const normalizedEmail = normalizeEmail(req.body?.email);
+
+    if (!normalizedEmail) {
+      return res.status(200).json({ message: genericSuccessMessage });
+    }
+
+    const user = await User.findOne({ email: normalizedEmail });
+    if (!user) {
+      return res.status(200).json({ message: genericSuccessMessage });
+    }
+
+    if (!canRequestPasswordReset(user)) {
+      return res.status(200).json({ message: genericSuccessMessage });
+    }
+
+    const resetToken = generateResetToken();
+    setResetState(user, resetToken);
+    await user.save();
+
+    const resetLink = `${getClientAppUrl()}/reset-password?token=${encodeURIComponent(resetToken)}`;
+    queuePasswordResetEmailInBackground(user.email, resetLink);
+
+    return res.status(200).json({ message: genericSuccessMessage });
+  } catch (error) {
+    return res.status(500).json({ message: error.message });
+  }
+};
+
+export const resetPassword = async (req, res) => {
+  try {
+    const token = String(req.body?.token || "").trim();
+    const password = String(req.body?.password || "");
+
+    if (!token || !password) {
+      return res.status(400).json({ message: "Token and password are required" });
+    }
+
+    if (password.length < MIN_PASSWORD_LENGTH) {
+      return res
+        .status(400)
+        .json({ message: `Password must be at least ${MIN_PASSWORD_LENGTH} characters long` });
+    }
+
+    const tokenHash = hashResetToken(token);
+    const user = await User.findOne({
+      resetPasswordTokenHash: tokenHash,
+      resetPasswordExpires: { $gt: new Date() },
+    });
+
+    if (!user) {
+      return res.status(400).json({ message: "Invalid or expired reset link" });
+    }
+
+    const salt = await bcrypt.genSalt(10);
+    user.password = await bcrypt.hash(password, salt);
+    user.isVerified = true;
+    clearResetState(user);
+    ensureAdminRoleFromEmail(user);
+    await user.save();
+
+    return res.status(200).json({ message: "Password reset successful. Please login." });
   } catch (error) {
     return res.status(500).json({ message: error.message });
   }
@@ -421,11 +524,7 @@ export const loginUser = async (req, res) => {
         setOtpState(user, otp);
         await user.save();
 
-        try {
-          await queueOtpEmail(user.email, "CineCircle OTP Verification Code", otp);
-        } catch {
-          message = "Please verify your email. We could not send a new OTP right now. Try resend OTP shortly.";
-        }
+        queueOtpEmailInBackground(user.email, "CineCircle OTP Verification Code", otp);
       } else {
         message = `Please verify your email with your latest OTP, or request another OTP in ${getResendCooldownSeconds(user)}s.`;
       }

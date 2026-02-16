@@ -4,6 +4,7 @@ import nodemailer from "nodemailer";
 const getEmailService = () => (process.env.EMAIL_SERVICE || "gmail").toLowerCase().trim();
 
 const getSenderEmail = () => process.env.EMAIL_FROM || process.env.EMAIL_USER || "";
+const getAppUrl = () => (process.env.CLIENT_URL || "https://cine-circle-ten.vercel.app").replace(/\/$/, "");
 
 const getSmtpUser = () => {
   const service = getEmailService();
@@ -72,7 +73,7 @@ const sendHtmlEmail = async ({ to, subject, html }) => {
 export const sendEmail = async (to, subject, text) => {
   try {
     const otp = String(text || "").trim();
-    const appUrl = "https://cine-circle-ten.vercel.app";
+    const appUrl = getAppUrl();
     const safeSubject = subject || "CineCircle OTP Verification Code";
 
     await sendHtmlEmail({
@@ -119,6 +120,62 @@ export const sendEmail = async (to, subject, text) => {
   } catch (error) {
     console.error("Email sending failed:", error.message);
     throw new Error("Email could not be sent");
+  }
+};
+
+export const sendPasswordResetEmail = async (to, resetLink) => {
+  try {
+    const appUrl = getAppUrl();
+
+    await sendHtmlEmail({
+      to,
+      subject: "CineCircle Password Reset Request",
+      html: `
+        <div style="margin:0;padding:24px;background:#f3f4f6;font-family:Arial,sans-serif;color:#111827;">
+          <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="max-width:600px;margin:0 auto;background:#ffffff;border:1px solid #e5e7eb;border-radius:12px;overflow:hidden;">
+            <tr>
+              <td style="padding:20px 24px;background:linear-gradient(135deg,#2563eb,#1d4ed8);">
+                <h1 style="margin:0;font-size:22px;line-height:1.2;color:#ffffff;font-weight:700;">CineCircle</h1>
+                <p style="margin:8px 0 0 0;color:#dbeafe;font-size:13px;">Secure Password Reset</p>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:24px;">
+                <h2 style="margin:0 0 12px 0;font-size:20px;color:#111827;">Reset Your Password</h2>
+                <p style="margin:0 0 14px 0;font-size:14px;line-height:1.6;color:#374151;">
+                  We received a request to reset your CineCircle account password.
+                </p>
+                <p style="margin:0 0 20px 0;font-size:14px;line-height:1.6;color:#374151;">
+                  Click the button below to set a new password. This secure link expires in <strong>15 minutes</strong>.
+                </p>
+                <div style="margin:0 0 20px 0;">
+                  <a href="${resetLink}" target="_blank" rel="noopener noreferrer" style="display:inline-block;background:#2563eb;color:#ffffff;text-decoration:none;padding:12px 20px;border-radius:8px;font-weight:600;">Reset Password</a>
+                </div>
+                <p style="margin:0 0 8px 0;font-size:13px;line-height:1.6;color:#6b7280;">
+                  If the button does not work, copy and paste this URL into your browser:
+                </p>
+                <p style="margin:0 0 12px 0;font-size:12px;line-height:1.6;color:#1d4ed8;word-break:break-all;">
+                  ${resetLink}
+                </p>
+                <p style="margin:0;font-size:13px;line-height:1.6;color:#6b7280;">
+                  If you did not request this reset, you can safely ignore this email.
+                </p>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:14px 24px;border-top:1px solid #e5e7eb;background:#fafafa;">
+                <p style="margin:0;font-size:12px;line-height:1.6;color:#6b7280;text-align:center;">
+                  Copyright CineCircle. <a href="${appUrl}" target="_blank" rel="noopener noreferrer" style="color:#2563eb;text-decoration:none;font-weight:600;">CineCircle (${appUrl})</a>
+                </p>
+              </td>
+            </tr>
+          </table>
+        </div>
+      `,
+    });
+  } catch (error) {
+    console.error("Password reset email sending failed:", error.message);
+    throw new Error("Password reset email could not be sent");
   }
 };
 
