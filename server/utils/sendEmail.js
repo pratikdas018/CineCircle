@@ -1,73 +1,178 @@
 import "dotenv/config";
 import nodemailer from "nodemailer";
 
-const getEmailService = () => (process.env.EMAIL_SERVICE || "gmail").toLowerCase().trim();
+const DEFAULT_APP_URL = "https://cine-circle-ten.vercel.app";
+let cachedTransporter = null;
+let cachedTransporterKey = "";
+
+const getEmailService = () => {
+  const explicitService = (process.env.EMAIL_SERVICE || "").toLowerCase().trim();
+  if (explicitService) return explicitService;
+
+  // Auto-select SMTP in production if host/user exists and service is not explicitly set.
+  if (process.env.EMAIL_HOST || process.env.EMAIL_PORT || process.env.EMAIL_USER) {
+    return "smtp";
+  }
+
+  return "gmail";
+};
 
 const getSenderEmail = () => process.env.EMAIL_FROM || process.env.EMAIL_USER || "";
-const getAppUrl = () => (process.env.CLIENT_URL || "https://cine-circle-ten.vercel.app").replace(/\/$/, "");
 
-const getSmtpUser = () => {
-  const service = getEmailService();
+const getSenderName = () => process.env.EMAIL_FROM_NAME || "CineCircle Support";
 
-  // For Gmail, prefer EMAIL_FROM to avoid stale EMAIL_USER values from other providers.
+const getAppUrl = () =>
+  (
+    process.env.FRONTEND_URL ||
+    process.env.APP_URL ||
+    process.env.CLIENT_URL ||
+    DEFAULT_APP_URL
+  ).replace(/\/$/, "");
+
+const getEmailPassword = () => process.env.EMAIL_PASS || process.env.EMAIL_PASSWORD || "";
+
+const getSmtpUser = (service) => {
   if (service === "gmail") {
+    // Gmail app-password auth is tied to mailbox owner, so prefer EMAIL_FROM.
     return process.env.EMAIL_FROM || process.env.EMAIL_USER || "";
   }
 
   return process.env.EMAIL_USER || process.env.EMAIL_FROM || "";
 };
 
-const ensureEmailConfig = () => {
-  const smtpUser = getSmtpUser();
+const getSmtpHost = (service) => {
+  if (process.env.EMAIL_HOST) return process.env.EMAIL_HOST;
+  if (service === "brevo") return "smtp-relay.brevo.com";
+  return "";
+};
+
+const buildEmailConfig = () => {
+  const service = getEmailService();
+  const smtpUser = getSmtpUser(service);
   const senderEmail = getSenderEmail();
-  const pass = process.env.EMAIL_PASS || "";
+  const pass = getEmailPassword();
 
   if (!senderEmail || !smtpUser || !pass) {
     throw new Error(
-      "Email config missing. Required: EMAIL_FROM, EMAIL_PASS and (EMAIL_USER for non-gmail providers)."
+      "Email config missing. Required vars: EMAIL_FROM (or EMAIL_USER), and EMAIL_PASS."
     );
   }
 
-  return { smtpUser, senderEmail, pass };
+  if (service !== "gmail" && !process.env.EMAIL_HOST && service !== "brevo" && service !== "smtp") {
+    throw new Error(`Unsupported EMAIL_SERVICE value: ${service}`);
+  }
+
+  if (service === "smtp" && !process.env.EMAIL_HOST) {
+    throw new Error("EMAIL_HOST is required when EMAIL_SERVICE=smtp");
+  }
+
+  return {
+    service,
+    smtpUser,
+    senderEmail,
+    senderName: getSenderName(),
+    pass,
+    host: getSmtpHost(service),
+    port: Number(process.env.EMAIL_PORT || 587),
+    secure: String(process.env.EMAIL_PORT || "587") === "465",
+  };
 };
 
-const createTransporter = () => {
-  const { smtpUser, pass } = ensureEmailConfig();
-  const service = getEmailService();
+const getTransporterKey = (config) =>
+  JSON.stringify({
+    service: config.service,
+    host: config.host,
+    port: config.port,
+    secure: config.secure,
+    smtpUser: config.smtpUser,
+  });
 
-  if (service === "gmail") {
+const createTransporter = (config) => {
+  const commonOptions = {
+    pool: true,
+    maxConnections: 3,
+    maxMessages: 200,
+    connectionTimeout: 15000,
+    greetingTimeout: 15000,
+    socketTimeout: 20000,
+  };
+
+  if (config.service === "gmail") {
     return nodemailer.createTransport({
+      ...commonOptions,
       service: "gmail",
       auth: {
-        user: smtpUser,
-        pass,
+        user: config.smtpUser,
+        pass: config.pass,
       },
     });
   }
 
   return nodemailer.createTransport({
-    host: process.env.EMAIL_HOST || "smtp-relay.brevo.com",
-    port: Number(process.env.EMAIL_PORT || 587),
-    secure: String(process.env.EMAIL_PORT || "587") === "465",
+    ...commonOptions,
+    host: config.host,
+    port: config.port,
+    secure: config.secure,
     auth: {
-      user: smtpUser,
-      pass,
+      user: config.smtpUser,
+      pass: config.pass,
+    },
+    tls: {
+      minVersion: "TLSv1.2",
     },
   });
 };
 
-const sendHtmlEmail = async ({ to, subject, html }) => {
-  const { senderEmail } = ensureEmailConfig();
-  const transporter = createTransporter();
+const getTransporter = () => {
+  const config = buildEmailConfig();
+  const transporterKey = getTransporterKey(config);
+
+  if (!cachedTransporter || cachedTransporterKey !== transporterKey) {
+    cachedTransporter = createTransporter(config);
+    cachedTransporterKey = transporterKey;
+  }
+
+  return { transporter: cachedTransporter, config };
+};
+
+const sendHtmlEmail = async ({ to, subject, html, text }) => {
+  const { transporter, config } = getTransporter();
 
   const info = await transporter.sendMail({
-    from: `CineCircle Support <${senderEmail}>`,
+    from: `${config.senderName} <${config.senderEmail}>`,
     to,
     subject,
+    text,
     html,
   });
 
   console.log(`Email sent: ${info.messageId}`);
+};
+
+export const verifyEmailTransport = async () => {
+  try {
+    const service = getEmailService();
+    if (service === "gmail" && process.env.EMAIL_HOST) {
+      console.warn("[email] EMAIL_HOST is set but EMAIL_SERVICE=gmail. SMTP host will be ignored.");
+    }
+    if (service === "gmail" && process.env.EMAIL_USER && process.env.EMAIL_FROM) {
+      const normalizedUser = String(process.env.EMAIL_USER).trim().toLowerCase();
+      const normalizedFrom = String(process.env.EMAIL_FROM).trim().toLowerCase();
+      if (normalizedUser !== normalizedFrom) {
+        console.warn(
+          "[email] EMAIL_USER and EMAIL_FROM differ with Gmail. Use the same mailbox for reliable delivery."
+        );
+      }
+    }
+
+    const { transporter, config } = getTransporter();
+    await transporter.verify();
+    console.log(
+      `[email] Transport ready via ${config.service} (${config.service === "gmail" ? "gmail" : `${config.host}:${config.port}`})`
+    );
+  } catch (error) {
+    console.error(`[email] Transport verification failed: ${error.message}`);
+  }
 };
 
 export const sendEmail = async (to, subject, text) => {
@@ -79,6 +184,7 @@ export const sendEmail = async (to, subject, text) => {
     await sendHtmlEmail({
       to,
       subject: safeSubject,
+      text: `Your CineCircle OTP is ${otp}. This code is valid for 10 minutes. If you did not request this, ignore this email.`,
       html: `
         <div style="margin:0;padding:24px;background:#f3f4f6;font-family:Arial,sans-serif;color:#111827;">
           <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="max-width:600px;margin:0 auto;background:#ffffff;border:1px solid #e5e7eb;border-radius:12px;overflow:hidden;">
@@ -130,6 +236,7 @@ export const sendPasswordResetEmail = async (to, resetLink) => {
     await sendHtmlEmail({
       to,
       subject: "CineCircle Password Reset Request",
+      text: `Reset your CineCircle password using this secure link (valid for 15 minutes): ${resetLink}`,
       html: `
         <div style="margin:0;padding:24px;background:#f3f4f6;font-family:Arial,sans-serif;color:#111827;">
           <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="max-width:600px;margin:0 auto;background:#ffffff;border:1px solid #e5e7eb;border-radius:12px;overflow:hidden;">

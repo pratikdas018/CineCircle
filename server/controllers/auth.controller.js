@@ -156,29 +156,22 @@ const otpMatches = (user, providedOtp) => {
 const queueOtpEmail = async (email, subject, otp) => {
   await enqueueEmailTask(() => sendEmail(email, subject, otp), {
     retries: 3,
-    retryDelayMs: 1500,
-  });
-};
-
-const queueOtpEmailInBackground = (email, subject, otp) => {
-  queueOtpEmail(email, subject, otp).catch((error) => {
-    console.error(`OTP email send failed for ${email}:`, error.message);
+    retryDelayMs: 900,
   });
 };
 
 const getClientAppUrl = () =>
-  (process.env.CLIENT_URL || "https://cine-circle-ten.vercel.app").replace(/\/$/, "");
+  (
+    process.env.FRONTEND_URL ||
+    process.env.APP_URL ||
+    process.env.CLIENT_URL ||
+    "https://cine-circle-ten.vercel.app"
+  ).replace(/\/$/, "");
 
 const queuePasswordResetEmail = async (email, resetLink) => {
   await enqueueEmailTask(() => sendPasswordResetEmail(email, resetLink), {
     retries: 3,
-    retryDelayMs: 1500,
-  });
-};
-
-const queuePasswordResetEmailInBackground = (email, resetLink) => {
-  queuePasswordResetEmail(email, resetLink).catch((error) => {
-    console.error(`Password reset email send failed for ${email}:`, error.message);
+    retryDelayMs: 900,
   });
 };
 
@@ -218,7 +211,14 @@ export const registerUser = async (req, res) => {
 
       await userExists.save();
 
-      queueOtpEmailInBackground(userExists.email, "CineCircle OTP Verification Code", otp);
+      try {
+        await queueOtpEmail(userExists.email, "CineCircle OTP Verification Code", otp);
+      } catch {
+        return res.status(503).json({
+          message: "Could not send OTP email right now. Please try again.",
+          email: userExists.email,
+        });
+      }
 
       return res.status(200).json({
         message: "Account exists but is unverified. A new OTP has been sent.",
@@ -241,7 +241,14 @@ export const registerUser = async (req, res) => {
     setOtpState(user, otp);
     await user.save();
 
-    queueOtpEmailInBackground(user.email, "CineCircle OTP Verification Code", otp);
+    try {
+      await queueOtpEmail(user.email, "CineCircle OTP Verification Code", otp);
+    } catch {
+      return res.status(503).json({
+        message: "Account created but OTP email could not be sent. Please resend OTP.",
+        email: user.email,
+      });
+    }
 
     return res.status(201).json({
       message: "Registration successful. Please check your email for the OTP.",
@@ -337,7 +344,11 @@ export const resendOTP = async (req, res) => {
     setOtpState(user, otp);
     await user.save();
 
-    queueOtpEmailInBackground(user.email, "CineCircle OTP Code (Resend)", otp);
+    try {
+      await queueOtpEmail(user.email, "CineCircle OTP Code (Resend)", otp);
+    } catch {
+      return res.status(503).json({ message: "Could not resend OTP right now. Please try again." });
+    }
 
     return res.status(200).json({ message: genericSuccessMessage });
   } catch (error) {
@@ -369,7 +380,11 @@ export const forgotPassword = async (req, res) => {
     await user.save();
 
     const resetLink = `${getClientAppUrl()}/reset-password?token=${encodeURIComponent(resetToken)}`;
-    queuePasswordResetEmailInBackground(user.email, resetLink);
+    try {
+      await queuePasswordResetEmail(user.email, resetLink);
+    } catch {
+      return res.status(503).json({ message: "Could not send reset link right now. Please try again." });
+    }
 
     return res.status(200).json({ message: genericSuccessMessage });
   } catch (error) {
@@ -524,7 +539,11 @@ export const loginUser = async (req, res) => {
         setOtpState(user, otp);
         await user.save();
 
-        queueOtpEmailInBackground(user.email, "CineCircle OTP Verification Code", otp);
+        try {
+          await queueOtpEmail(user.email, "CineCircle OTP Verification Code", otp);
+        } catch {
+          message = "Please verify your email. We could not send OTP right now. Try resend OTP.";
+        }
       } else {
         message = `Please verify your email with your latest OTP, or request another OTP in ${getResendCooldownSeconds(user)}s.`;
       }

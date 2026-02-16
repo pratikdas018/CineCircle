@@ -25,6 +25,7 @@ import notificationRoutes from "./routes/notification.routes.js";
 import adminRoutes from "./routes/admin.routes.js";
 import clubRoutes from "./routes/club.routes.js";
 import availabilityAlertRoutes from "./routes/availabilityAlert.routes.js";
+import { verifyEmailTransport } from "./utils/sendEmail.js";
 import {
   addOnlineUser,
   emitToUser,
@@ -38,6 +39,7 @@ const __dirname = path.dirname(__filename);
 
 connectDB();
 startReminderJob();
+verifyEmailTransport();
 
 const app = express();
 app.set("trust proxy", 1);
