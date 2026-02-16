@@ -1,7 +1,9 @@
 import "dotenv/config";
 import nodemailer from "nodemailer";
+import axios from "axios";
 
 const DEFAULT_APP_URL = "https://cine-circle-ten.vercel.app";
+const BREVO_API_BASE_URL = "https://api.brevo.com/v3";
 let cachedTransporter = null;
 let cachedTransporterKey = "";
 
@@ -20,6 +22,11 @@ const getEmailService = () => {
 const getSenderEmail = () => process.env.EMAIL_FROM || process.env.EMAIL_USER || "";
 
 const getSenderName = () => process.env.EMAIL_FROM_NAME || "CineCircle Support";
+const getBrevoApiKey = () => process.env.BREVO_API_KEY || process.env.EMAIL_API_KEY || "";
+const getEmailTransport = () => (process.env.EMAIL_TRANSPORT || "").toLowerCase().trim();
+const isBrevoApiPreferred = () =>
+  getEmailTransport() === "brevo_api" || getEmailService() === "brevo_api";
+const canUseBrevoApi = () => Boolean(getBrevoApiKey());
 
 const getAppUrl = () =>
   (
@@ -30,6 +37,7 @@ const getAppUrl = () =>
   ).replace(/\/$/, "");
 
 const getEmailPassword = () => process.env.EMAIL_PASS || process.env.EMAIL_PASSWORD || "";
+const getRecipient = (to) => String(to || "").trim();
 
 const getSmtpUser = (service) => {
   if (service === "gmail") {
@@ -46,35 +54,52 @@ const getSmtpHost = (service) => {
   return "";
 };
 
-const buildEmailConfig = () => {
+const buildBaseEmailConfig = () => {
   const service = getEmailService();
-  const smtpUser = getSmtpUser(service);
   const senderEmail = getSenderEmail();
-  const pass = getEmailPassword();
 
-  if (!senderEmail || !smtpUser || !pass) {
-    throw new Error(
-      "Email config missing. Required vars: EMAIL_FROM (or EMAIL_USER), and EMAIL_PASS."
-    );
-  }
-
-  if (service !== "gmail" && !process.env.EMAIL_HOST && service !== "brevo" && service !== "smtp") {
-    throw new Error(`Unsupported EMAIL_SERVICE value: ${service}`);
-  }
-
-  if (service === "smtp" && !process.env.EMAIL_HOST) {
-    throw new Error("EMAIL_HOST is required when EMAIL_SERVICE=smtp");
+  if (!senderEmail) {
+    throw new Error("Email config missing. Required var: EMAIL_FROM (or EMAIL_USER).");
   }
 
   return {
     service,
-    smtpUser,
     senderEmail,
     senderName: getSenderName(),
-    pass,
     host: getSmtpHost(service),
     port: Number(process.env.EMAIL_PORT || 587),
     secure: String(process.env.EMAIL_PORT || "587") === "465",
+  };
+};
+
+const buildSmtpConfig = () => {
+  const baseConfig = buildBaseEmailConfig();
+  const smtpUser = getSmtpUser(baseConfig.service);
+  const pass = getEmailPassword();
+
+  if (!smtpUser || !pass) {
+    throw new Error(
+      "SMTP email config missing. Required vars: EMAIL_USER/EMAIL_FROM and EMAIL_PASS."
+    );
+  }
+
+  if (
+    baseConfig.service !== "gmail" &&
+    !process.env.EMAIL_HOST &&
+    baseConfig.service !== "brevo" &&
+    baseConfig.service !== "smtp"
+  ) {
+    throw new Error(`Unsupported EMAIL_SERVICE value: ${baseConfig.service}`);
+  }
+
+  if (baseConfig.service === "smtp" && !process.env.EMAIL_HOST) {
+    throw new Error("EMAIL_HOST is required when EMAIL_SERVICE=smtp");
+  }
+
+  return {
+    ...baseConfig,
+    smtpUser,
+    pass,
   };
 };
 
@@ -124,7 +149,7 @@ const createTransporter = (config) => {
 };
 
 const getTransporter = () => {
-  const config = buildEmailConfig();
+  const config = buildSmtpConfig();
   const transporterKey = getTransporterKey(config);
 
   if (!cachedTransporter || cachedTransporterKey !== transporterKey) {
@@ -135,7 +160,19 @@ const getTransporter = () => {
   return { transporter: cachedTransporter, config };
 };
 
-const sendHtmlEmail = async ({ to, subject, html, text }) => {
+const isNetworkTimeoutError = (error) => {
+  const code = String(error?.code || "").toUpperCase();
+  const message = String(error?.message || "").toLowerCase();
+  return (
+    code === "ETIMEDOUT" ||
+    code === "ESOCKET" ||
+    code === "ECONNECTION" ||
+    code === "ECONNREFUSED" ||
+    message.includes("timeout")
+  );
+};
+
+const sendHtmlEmailWithSmtp = async ({ to, subject, html, text }) => {
   const { transporter, config } = getTransporter();
 
   const info = await transporter.sendMail({
@@ -149,8 +186,77 @@ const sendHtmlEmail = async ({ to, subject, html, text }) => {
   console.log(`Email sent: ${info.messageId}`);
 };
 
+const sendHtmlEmailWithBrevoApi = async ({ to, subject, html, text }) => {
+  const apiKey = getBrevoApiKey();
+  if (!apiKey) {
+    throw new Error("BREVO_API_KEY is missing for Brevo API transport");
+  }
+
+  const config = buildBaseEmailConfig();
+  const recipient = getRecipient(to);
+  if (!recipient) {
+    throw new Error("Recipient email is required");
+  }
+
+  const payload = {
+    sender: {
+      name: config.senderName,
+      email: config.senderEmail,
+    },
+    to: [{ email: recipient }],
+    subject,
+    ...(html ? { htmlContent: html } : { textContent: String(text || "") }),
+  };
+
+  const response = await axios.post(`${BREVO_API_BASE_URL}/smtp/email`, payload, {
+    headers: {
+      "api-key": apiKey,
+      "content-type": "application/json",
+      accept: "application/json",
+    },
+    timeout: 15000,
+  });
+
+  const messageId = response?.data?.messageId || "brevo-api-accepted";
+  console.log(`Email sent via Brevo API: ${messageId}`);
+};
+
+const sendHtmlEmail = async ({ to, subject, html, text }) => {
+  if (isBrevoApiPreferred()) {
+    await sendHtmlEmailWithBrevoApi({ to, subject, html, text });
+    return;
+  }
+
+  try {
+    await sendHtmlEmailWithSmtp({ to, subject, html, text });
+  } catch (error) {
+    if (canUseBrevoApi() && isNetworkTimeoutError(error)) {
+      console.warn(`[email] SMTP timed out. Falling back to Brevo API for ${to}.`);
+      await sendHtmlEmailWithBrevoApi({ to, subject, html, text });
+      return;
+    }
+    throw error;
+  }
+};
+
 export const verifyEmailTransport = async () => {
   try {
+    if (isBrevoApiPreferred()) {
+      if (!canUseBrevoApi()) {
+        throw new Error("BREVO_API_KEY missing while EMAIL_TRANSPORT/EMAIL_SERVICE expects brevo_api");
+      }
+
+      await axios.get(`${BREVO_API_BASE_URL}/account`, {
+        headers: {
+          "api-key": getBrevoApiKey(),
+          accept: "application/json",
+        },
+        timeout: 10000,
+      });
+      console.log("[email] Transport ready via brevo_api (HTTPS)");
+      return;
+    }
+
     const service = getEmailService();
     if (service === "gmail" && process.env.EMAIL_HOST) {
       console.warn("[email] EMAIL_HOST is set but EMAIL_SERVICE=gmail. SMTP host will be ignored.");
@@ -170,6 +276,9 @@ export const verifyEmailTransport = async () => {
     console.log(
       `[email] Transport ready via ${config.service} (${config.service === "gmail" ? "gmail" : `${config.host}:${config.port}`})`
     );
+    if (canUseBrevoApi()) {
+      console.log("[email] Brevo API fallback is enabled.");
+    }
   } catch (error) {
     console.error(`[email] Transport verification failed: ${error.message}`);
   }
