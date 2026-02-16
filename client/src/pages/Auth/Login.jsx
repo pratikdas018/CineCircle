@@ -1,14 +1,22 @@
-import { useState, useContext } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { useState, useContext, useEffect } from "react";
+import { useNavigate, Link, useLocation } from "react-router-dom";
 import api from "../../services/api";
 import { AuthContext } from "../../context/AuthContext";
 
 const Login = () => {
-  const { login } = useContext(AuthContext);
+  const { user, login } = useContext(AuthContext);
   const navigate = useNavigate();
+  const location = useLocation();
   const [form, setForm] = useState({ email: "", password: "" });
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
+  const redirectTo = location.state?.from || "/";
+
+  useEffect(() => {
+    if (user) {
+      navigate(redirectTo, { replace: true });
+    }
+  }, [user, navigate, redirectTo]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -17,7 +25,7 @@ const Login = () => {
     try {
       const res = await api.post("/api/auth/login", form);
       login(res.data);
-      navigate("/");
+      navigate(redirectTo, { replace: true });
     } catch (err) {
       if (err.response?.status === 401 && err.response?.data?.isUnverified) {
         navigate("/verify-otp", { state: { email: err.response.data.email } });

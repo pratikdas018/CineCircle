@@ -1,4 +1,5 @@
 import Notification from "../models/Notification.js";
+import { emitToUser } from "../utils/socketState.js";
 
 // 📥 Get all notifications for the current user
 export const getNotifications = async (req, res) => {
@@ -33,6 +34,7 @@ export const markNotificationsAsRead = async (req, res) => {
       { recipient: req.user._id, read: false },
       { $set: { read: true } }
     );
+    emitToUser(req.user._id, "notification:unread-count", { unreadCount: 0 });
     res.json({ message: "Notifications marked as read" });
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -58,6 +60,13 @@ export const markSingleNotificationAsRead = async (req, res) => {
       { new: true }
     );
     if (!notification) return res.status(404).json({ message: "Notification not found" });
+
+    const unreadCount = await Notification.countDocuments({
+      recipient: req.user._id,
+      read: false,
+    });
+    emitToUser(req.user._id, "notification:unread-count", { unreadCount });
+
     res.json(notification);
   } catch (error) {
     res.status(500).json({ message: error.message });

@@ -1,10 +1,21 @@
 import Review from "../models/Review.js";
 import User from "../models/User.js";
 import Watchlist from "../models/Watchlist.js";
-import Notification from "../models/Notification.js";
+import { createNotificationAndEmit } from "../utils/notificationRealtime.js";
 
+const getMentionedUsers = async (text) => {
+  const mentionRegex = /@([\w.]+)/g;
+  const mentionedUsernames = Array.from(
+    new Set((text.match(mentionRegex) || []).map((match) => match.substring(1)))
+  );
 
-// ➕ Add or Update Review
+  if (mentionedUsernames.length === 0) {
+    return [];
+  }
+
+  return User.find({ name: { $in: mentionedUsernames } }).select("_id name");
+};
+
 export const addReview = async (req, res) => {
   try {
     const { movieId, movieTitle, rating, comment, maxRating } = req.body;
@@ -16,7 +27,6 @@ export const addReview = async (req, res) => {
     });
 
     if (review) {
-      // Update existing review
       review.rating = rating;
       review.comment = comment;
       if (movieTitle) review.movieTitle = movieTitle;
@@ -36,44 +46,41 @@ export const addReview = async (req, res) => {
       image,
     });
 
-    res.status(201).json(review);
+    return res.status(201).json(review);
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    return res.status(500).json({ message: error.message });
   }
 };
 
-// 📥 Get Reviews for a Movie
 export const getMovieReviews = async (req, res) => {
   try {
     const reviews = await Review.find({ movieId: req.params.movieId })
       .populate("user", "name avatar")
       .sort({ createdAt: -1 });
 
-    // Optimization: Fetch all watchlisted users for this movie in one query
-    const userIds = reviews.map(r => r.user._id);
+    const userIds = reviews.map((review) => review.user._id);
     const watchlistedUsers = await Watchlist.find({
       movieId: req.params.movieId,
-      user: { $in: userIds }
-    }).distinct('user');
+      user: { $in: userIds },
+    }).distinct("user");
 
-    const watchlistedSet = new Set(watchlistedUsers.map(id => id.toString()));
+    const watchlistedSet = new Set(watchlistedUsers.map((id) => id.toString()));
 
-    const reviewsWithVerification = reviews.map(review => ({
+    const reviewsWithVerification = reviews.map((review) => ({
       ...review.toObject(),
-      isVerified: watchlistedSet.has(review.user._id.toString())
+      isVerified: watchlistedSet.has(review.user._id.toString()),
     }));
 
-    res.json(reviewsWithVerification);
+    return res.json(reviewsWithVerification);
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    return res.status(500).json({ message: error.message });
   }
 };
 
-//Get Review from Friends
 export const getFriendsReviews = async (req, res) => {
   try {
-    const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 10;
+    const page = parseInt(req.query.page, 10) || 1;
+    const limit = parseInt(req.query.limit, 10) || 10;
     const skip = (page - 1) * limit;
 
     const user = await User.findById(req.user._id);
@@ -87,13 +94,12 @@ export const getFriendsReviews = async (req, res) => {
     const total = await Review.countDocuments({ user: { $in: user.friends } });
     const hasMore = skip + reviews.length < total;
 
-    res.json({ reviews, hasMore });
+    return res.json({ reviews, hasMore });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    return res.status(500).json({ message: error.message });
   }
 };
 
-// 🗑️ Delete Comment from Review
 export const deleteComment = async (req, res) => {
   try {
     const review = await Review.findById(req.params.id);
@@ -102,7 +108,6 @@ export const deleteComment = async (req, res) => {
     const comment = review.comments.id(req.params.commentId);
     if (!comment) return res.status(404).json({ message: "Comment not found" });
 
-    // Check ownership
     if (comment.user.toString() !== req.user._id.toString()) {
       return res.status(403).json({ message: "Unauthorized" });
     }
@@ -110,15 +115,16 @@ export const deleteComment = async (req, res) => {
     comment.deleteOne();
     await review.save();
 
-    const updatedReview = await Review.findById(review._id).populate("user", "name avatar").populate("comments.user", "name avatar");
-    res.json(updatedReview);
+    const updatedReview = await Review.findById(review._id)
+      .populate("user", "name avatar")
+      .populate("comments.user", "name avatar");
+
+    return res.json(updatedReview);
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    return res.status(500).json({ message: error.message });
   }
 };
 
-
-// ❌ Delete Review
 export const deleteReview = async (req, res) => {
   try {
     const review = await Review.findOneAndDelete({
@@ -130,13 +136,12 @@ export const deleteReview = async (req, res) => {
       return res.status(404).json({ message: "Review not found" });
     }
 
-    res.json({ message: "Review deleted" });
+    return res.json({ message: "Review deleted" });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    return res.status(500).json({ message: error.message });
   }
 };
 
-// 💬 Add Comment to Review
 export const addComment = async (req, res) => {
   try {
     const { text } = req.body;
@@ -145,56 +150,45 @@ export const addComment = async (req, res) => {
     const review = await Review.findById(req.params.id);
     if (!review) return res.status(404).json({ message: "Review not found" });
 
-    const newComment = {
+    review.comments.push({
       user: req.user._id,
       text,
-      createdAt: new Date()
-    };
+      createdAt: new Date(),
+    });
 
-    review.comments.push(newComment);
     await review.save();
 
-    // 📣 Handle Mentions (@username)
-    const mentionRegex = /@(\w+)/g;
-    const mentionedUsernames = text.match(mentionRegex)?.map(m => m.substring(1)) || [];
-    let mentionedUsers = [];
+    const mentionedUsers = await getMentionedUsers(text);
+    for (const mentionedUser of mentionedUsers) {
+      if (mentionedUser._id.toString() === review.user.toString()) continue;
 
-    if (mentionedUsernames.length > 0) {
-      mentionedUsers = await User.find({ name: { $in: mentionedUsernames } }).select("_id name");
-      for (const mUser of mentionedUsers) {
-        // Notify mentioned user if they aren't the sender or the review owner (who gets a 'comment' notification)
-        if (mUser._id.toString() !== req.user._id.toString() && mUser._id.toString() !== review.user.toString()) {
-          await Notification.create({
-            recipient: mUser._id,
-            sender: req.user._id,
-            type: "mention",
-            reviewId: review._id,
-            movieTitle: review.movieTitle
-          });
-        }
-      }
-    }
-
-    // 🔔 Create Notification for the review owner
-    if (review.user.toString() !== req.user._id.toString()) {
-      await Notification.create({
-        recipient: review.user,
+      await createNotificationAndEmit({
+        recipient: mentionedUser._id,
         sender: req.user._id,
-        type: "comment",
+        type: "mention",
         reviewId: review._id,
-        movieTitle: review.movieTitle
+        movieTitle: review.movieTitle,
       });
     }
 
-    // Populate user info for the new comment before sending back
-    const updatedReview = await Review.findById(review._id).populate("user", "name avatar").populate("comments.user", "name avatar");
-    res.json({ ...updatedReview.toObject(), mentionedUsers });
+    await createNotificationAndEmit({
+      recipient: review.user,
+      sender: req.user._id,
+      type: "comment",
+      reviewId: review._id,
+      movieTitle: review.movieTitle,
+    });
+
+    const updatedReview = await Review.findById(review._id)
+      .populate("user", "name avatar")
+      .populate("comments.user", "name avatar");
+
+    return res.json({ ...updatedReview.toObject(), mentionedUsers });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    return res.status(500).json({ message: error.message });
   }
 };
 
-// ✏️ Update Comment on Review
 export const updateComment = async (req, res) => {
   try {
     const { text } = req.body;
@@ -206,7 +200,6 @@ export const updateComment = async (req, res) => {
     const comment = review.comments.id(req.params.commentId);
     if (!comment) return res.status(404).json({ message: "Comment not found" });
 
-    // Check ownership
     if (comment.user.toString() !== req.user._id.toString()) {
       return res.status(403).json({ message: "Unauthorized" });
     }
@@ -214,45 +207,37 @@ export const updateComment = async (req, res) => {
     comment.text = text;
     await review.save();
 
-    // 📣 Handle Mentions (@username)
-    const mentionRegex = /@(\w+)/g;
-    const mentionedUsernames = text.match(mentionRegex)?.map(m => m.substring(1)) || [];
-    let mentionedUsers = [];
+    const mentionedUsers = await getMentionedUsers(text);
+    for (const mentionedUser of mentionedUsers) {
+      if (mentionedUser._id.toString() === review.user.toString()) continue;
 
-    if (mentionedUsernames.length > 0) {
-      mentionedUsers = await User.find({ name: { $in: mentionedUsernames } }).select("_id name");
-      for (const mUser of mentionedUsers) {
-        if (mUser._id.toString() !== req.user._id.toString() && mUser._id.toString() !== review.user.toString()) {
-          await Notification.create({
-            recipient: mUser._id,
-            sender: req.user._id,
-            type: "mention",
-            reviewId: review._id,
-            movieTitle: review.movieTitle
-          });
-        }
-      }
-    }
-
-    // 🔔 Create Notification for the review owner
-    if (review.user.toString() !== req.user._id.toString()) {
-      await Notification.create({
-        recipient: review.user,
+      await createNotificationAndEmit({
+        recipient: mentionedUser._id,
         sender: req.user._id,
-        type: "comment",
+        type: "mention",
         reviewId: review._id,
-        movieTitle: review.movieTitle
+        movieTitle: review.movieTitle,
       });
     }
 
-    const updatedReview = await Review.findById(review._id).populate("user", "name avatar").populate("comments.user", "name avatar");
-    res.json({ ...updatedReview.toObject(), mentionedUsers });
+    await createNotificationAndEmit({
+      recipient: review.user,
+      sender: req.user._id,
+      type: "comment",
+      reviewId: review._id,
+      movieTitle: review.movieTitle,
+    });
+
+    const updatedReview = await Review.findById(review._id)
+      .populate("user", "name avatar")
+      .populate("comments.user", "name avatar");
+
+    return res.json({ ...updatedReview.toObject(), mentionedUsers });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    return res.status(500).json({ message: error.message });
   }
 };
 
-// 👍 Like/Unlike Review
 export const likeReview = async (req, res) => {
   try {
     const review = await Review.findById(req.params.id);
@@ -261,24 +246,20 @@ export const likeReview = async (req, res) => {
     const index = review.likes.indexOf(req.user._id);
     if (index === -1) {
       review.likes.push(req.user._id);
-      
-      // 🔔 Create Notification for the review owner
-      if (review.user.toString() !== req.user._id.toString()) {
-        await Notification.create({
-          recipient: review.user,
-          sender: req.user._id,
-          type: "like",
-          reviewId: review._id,
-          movieTitle: review.movieTitle
-        });
-      }
+      await createNotificationAndEmit({
+        recipient: review.user,
+        sender: req.user._id,
+        type: "like",
+        reviewId: review._id,
+        movieTitle: review.movieTitle,
+      });
     } else {
       review.likes.splice(index, 1);
     }
 
     await review.save();
-    res.json({ likes: review.likes });
+    return res.json({ likes: review.likes });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    return res.status(500).json({ message: error.message });
   }
 };

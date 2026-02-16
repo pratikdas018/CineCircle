@@ -6,7 +6,7 @@ import { useContext } from "react";
 import { NotificationContext } from "../context/NotificationContext";
 
 const Notifications = () => {
-  const { setUnreadCount } = useContext(NotificationContext);
+  const { setUnreadCount, latestNotification } = useContext(NotificationContext);
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -34,6 +34,16 @@ const Notifications = () => {
   useEffect(() => {
     fetchNotifications(1);
   }, []);
+
+  useEffect(() => {
+    if (!latestNotification?._id) return;
+
+    setNotifications((prev) => {
+      const exists = prev.some((item) => item._id === latestNotification._id);
+      if (exists) return prev;
+      return [latestNotification, ...prev];
+    });
+  }, [latestNotification]);
 
   const markAsRead = async (id) => {
     try {

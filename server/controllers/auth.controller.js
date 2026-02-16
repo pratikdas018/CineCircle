@@ -4,8 +4,15 @@ import jwt from "jsonwebtoken";
 import axios from "axios";
 import crypto from "crypto";
 import { sendEmail } from "../utils/sendEmail.js";
+import { enqueueEmailTask } from "../utils/emailQueue.js";
 
-// Generate JWT
+const OTP_TTL_MS = 10 * 60 * 1000;
+const OTP_RESEND_COOLDOWN_MS = 60 * 1000;
+const OTP_MAX_ATTEMPTS = 5;
+const OTP_LOCK_MS = 15 * 60 * 1000;
+
+const normalizeEmail = (email) => String(email || "").trim().toLowerCase();
+
 const generateToken = (id) => {
   return jwt.sign({ id }, process.env.JWT_SECRET, {
     expiresIn: "30d",
@@ -18,7 +25,7 @@ const getInitialRole = (email) => {
     .map((item) => item.trim().toLowerCase())
     .filter(Boolean);
 
-  return adminEmails.includes(String(email).toLowerCase()) ? "admin" : "user";
+  return adminEmails.includes(normalizeEmail(email)) ? "admin" : "user";
 };
 
 const isAdminEmail = (email) => getInitialRole(email) === "admin";
@@ -42,151 +49,321 @@ const buildAuthPayload = (user) => ({
   token: generateToken(user._id),
 });
 
-const ensureAdminRoleFromEmail = async (user) => {
+const ensureAdminRoleFromEmail = (user) => {
   const shouldBeAdmin = getInitialRole(user.email) === "admin";
   if (shouldBeAdmin && user.role !== "admin") {
     user.role = "admin";
-    await user.save();
+    return true;
   }
+  return false;
 };
 
-// REGISTER
+const getOtpSecret = () => process.env.OTP_SECRET || process.env.JWT_SECRET || "sceneit_otp_secret";
+
+const hashOtp = (email, otp) =>
+  crypto
+    .createHmac("sha256", getOtpSecret())
+    .update(`${normalizeEmail(email)}:${String(otp).trim()}`)
+    .digest("hex");
+
+const generateOtp = () => crypto.randomInt(100000, 999999).toString();
+
+const clearOtpState = (user) => {
+  user.otp = undefined;
+  user.otpHash = undefined;
+  user.otpExpires = undefined;
+  user.otpAttempts = 0;
+  user.otpLockUntil = undefined;
+  user.otpLastSentAt = undefined;
+};
+
+const setOtpState = (user, otp) => {
+  user.otp = undefined;
+  user.otpHash = hashOtp(user.email, otp);
+  user.otpExpires = new Date(Date.now() + OTP_TTL_MS);
+  user.otpAttempts = 0;
+  user.otpLockUntil = undefined;
+  user.otpLastSentAt = new Date();
+};
+
+const isOtpLocked = (user) => {
+  if (!user?.otpLockUntil) return false;
+  return new Date(user.otpLockUntil).getTime() > Date.now();
+};
+
+const secondsUntilDate = (dateValue) => {
+  const millis = new Date(dateValue).getTime() - Date.now();
+  return Math.max(1, Math.ceil(millis / 1000));
+};
+
+const canResendOtp = (user) => {
+  if (!user?.otpLastSentAt) return true;
+  const elapsed = Date.now() - new Date(user.otpLastSentAt).getTime();
+  return elapsed >= OTP_RESEND_COOLDOWN_MS;
+};
+
+const getResendCooldownSeconds = (user) => {
+  if (!user?.otpLastSentAt) return 0;
+  const nextAllowedTime = new Date(user.otpLastSentAt).getTime() + OTP_RESEND_COOLDOWN_MS;
+  return Math.max(1, Math.ceil((nextAllowedTime - Date.now()) / 1000));
+};
+
+const isOtpExpired = (user) => {
+  if (!user?.otpExpires) return true;
+  return new Date(user.otpExpires).getTime() < Date.now();
+};
+
+const otpMatches = (user, providedOtp) => {
+  const normalizedOtp = String(providedOtp || "").trim();
+  if (!normalizedOtp) return false;
+
+  const hashed = hashOtp(user.email, normalizedOtp);
+  const hashMatches = Boolean(user.otpHash) && user.otpHash === hashed;
+  const legacyMatches = Boolean(user.otp) && user.otp === normalizedOtp;
+
+  return hashMatches || legacyMatches;
+};
+
+const queueOtpEmail = async (email, subject, otp) => {
+  await enqueueEmailTask(() => sendEmail(email, subject, otp), {
+    retries: 3,
+    retryDelayMs: 1500,
+  });
+};
+
 export const registerUser = async (req, res) => {
   try {
     const { name, email, password } = req.body;
+    const normalizedEmail = normalizeEmail(email);
 
-    if (!name || !email || !password)
+    if (!name || !normalizedEmail || !password) {
       return res.status(400).json({ message: "All fields are required" });
+    }
 
-    const userExists = await User.findOne({ email });
-    if (userExists)
+    const userExists = await User.findOne({ email: normalizedEmail });
+    if (userExists && userExists.isVerified) {
       return res.status(400).json({ message: "User already exists" });
+    }
+
+    if (userExists && !userExists.isVerified) {
+      if (!canResendOtp(userExists)) {
+        return res.status(429).json({
+          message: `Please wait ${getResendCooldownSeconds(userExists)}s before requesting another OTP.`,
+          email: userExists.email,
+        });
+      }
+
+      const otp = generateOtp();
+      setOtpState(userExists, otp);
+
+      if (!userExists.password) {
+        const salt = await bcrypt.genSalt(10);
+        userExists.password = await bcrypt.hash(password, salt);
+      }
+
+      if (!userExists.name && name) {
+        userExists.name = name;
+      }
+
+      await userExists.save();
+
+      try {
+        await queueOtpEmail(userExists.email, "CineCircle OTP Verification Code", otp);
+      } catch {
+        return res.status(503).json({
+          message: "Account exists but OTP could not be sent right now. Please try again shortly.",
+          email: userExists.email,
+        });
+      }
+
+      return res.status(200).json({
+        message: "Account exists but is unverified. A new OTP has been sent.",
+        email: userExists.email,
+      });
+    }
 
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, salt);
 
-    // Generate secure 6-digit OTP
-    const otp = crypto.randomInt(100000, 999999).toString();
-    const otpExpires = Date.now() + 10 * 60 * 1000; // 10 minutes expiry
-
     const user = await User.create({
       name,
-      email,
+      email: normalizedEmail,
       password: hashedPassword,
-      role: getInitialRole(email),
-      otp,
-      otpExpires,
+      role: getInitialRole(normalizedEmail),
       isVerified: false,
     });
 
-    await sendEmail(user.email, "Verify your CineCircle Account", otp);
+    const otp = generateOtp();
+    setOtpState(user, otp);
+    await user.save();
 
-    res.status(201).json({
+    try {
+      await queueOtpEmail(user.email, "CineCircle OTP Verification Code", otp);
+    } catch {
+      return res.status(503).json({
+        message: "Account created, but OTP email could not be sent. Please use resend OTP.",
+        email: user.email,
+      });
+    }
+
+    return res.status(201).json({
       message: "Registration successful. Please check your email for the OTP.",
       email: user.email,
     });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    return res.status(500).json({ message: error.message });
   }
 };
 
-// VERIFY OTP
 export const verifyOTP = async (req, res) => {
   try {
     const { email, otp } = req.body;
-    const user = await User.findOne({ email });
+    const normalizedEmail = normalizeEmail(email);
+    const submittedOtp = String(otp || "").trim();
 
-    if (!user) return res.status(404).json({ message: "User not found" });
-    if (user.isVerified) return res.status(400).json({ message: "User already verified" });
-    if (user.otp !== otp || user.otpExpires < Date.now()) {
+    if (!normalizedEmail || !submittedOtp) {
+      return res.status(400).json({ message: "Invalid or expired OTP" });
+    }
+
+    const user = await User.findOne({ email: normalizedEmail });
+
+    if (!user) {
+      return res.status(400).json({ message: "Invalid or expired OTP" });
+    }
+
+    if (user.isVerified) {
+      return res.status(400).json({ message: "User already verified" });
+    }
+
+    if (isOtpLocked(user)) {
+      return res.status(429).json({
+        message: `Too many invalid OTP attempts. Try again in ${secondsUntilDate(user.otpLockUntil)}s.`,
+      });
+    }
+
+    if (isOtpExpired(user)) {
+      return res.status(400).json({ message: "Invalid or expired OTP" });
+    }
+
+    if (!otpMatches(user, submittedOtp)) {
+      user.otpAttempts = Number(user.otpAttempts || 0) + 1;
+
+      if (user.otpAttempts >= OTP_MAX_ATTEMPTS) {
+        user.otpAttempts = 0;
+        user.otpLockUntil = new Date(Date.now() + OTP_LOCK_MS);
+        await user.save();
+
+        return res.status(429).json({
+          message: `Too many invalid OTP attempts. Try again in ${secondsUntilDate(user.otpLockUntil)}s.`,
+        });
+      }
+
+      await user.save();
       return res.status(400).json({ message: "Invalid or expired OTP" });
     }
 
     user.isVerified = true;
-    user.otp = undefined;
-    user.otpExpires = undefined;
-    await ensureAdminRoleFromEmail(user);
+    clearOtpState(user);
+    ensureAdminRoleFromEmail(user);
     await user.save();
 
-    res.json(buildAuthPayload(user));
+    return res.json(buildAuthPayload(user));
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    return res.status(500).json({ message: error.message });
   }
 };
 
-// RESEND OTP
 export const resendOTP = async (req, res) => {
   try {
-    const { email } = req.body;
-    const user = await User.findOne({ email });
+    const genericSuccessMessage = "If an account exists, a new OTP has been sent.";
+    const normalizedEmail = normalizeEmail(req.body?.email);
 
-    if (!user) return res.status(404).json({ message: "User not found" });
+    if (!normalizedEmail) {
+      return res.status(200).json({ message: genericSuccessMessage });
+    }
 
-    const otp = crypto.randomInt(100000, 999999).toString();
-    user.otp = otp;
-    user.otpExpires = Date.now() + 10 * 60 * 1000;
+    const user = await User.findOne({ email: normalizedEmail });
+
+    if (!user || user.isVerified) {
+      return res.status(200).json({ message: genericSuccessMessage });
+    }
+
+    if (isOtpLocked(user)) {
+      return res.status(200).json({ message: genericSuccessMessage });
+    }
+
+    if (!canResendOtp(user)) {
+      return res.status(200).json({ message: genericSuccessMessage });
+    }
+
+    const otp = generateOtp();
+    setOtpState(user, otp);
     await user.save();
 
-    await sendEmail(user.email, "Your new CineCircle OTP", otp);
-    res.json({ message: "New OTP sent to your email" });
+    try {
+      await queueOtpEmail(user.email, "CineCircle OTP Code (Resend)", otp);
+    } catch (error) {
+      console.error("Resend OTP email failed:", error.message);
+    }
+
+    return res.status(200).json({ message: genericSuccessMessage });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    return res.status(500).json({ message: error.message });
   }
 };
 
-// GOOGLE LOGIN
 export const googleLogin = async (req, res) => {
   try {
     const { accessToken } = req.body;
 
-    // 1. Get user info from Google using the access token
     const googleResponse = await axios.get(
       `https://www.googleapis.com/oauth2/v3/userinfo?access_token=${accessToken}`
     );
 
     const { sub: googleId, email, name, picture: avatar } = googleResponse.data;
+    const normalizedEmail = normalizeEmail(email);
 
-    // 2. Check if user already exists
-    let user = await User.findOne({ email });
+    let user = await User.findOne({ email: normalizedEmail });
 
     if (!user) {
-      // 3. Create new user if they don't exist
-      // We don't set a password for Google users
       user = await User.create({
         name,
-        email,
+        email: normalizedEmail,
         avatar,
         googleId,
-        role: getInitialRole(email),
-        isVerified: true, // Google users are pre-verified
+        role: getInitialRole(normalizedEmail),
+        isVerified: true,
       });
     } else if (!user.googleId) {
-      // 4. Link Google ID to existing email account if not already linked
       user.googleId = googleId;
-      if (!user.avatar) user.avatar = avatar; // Update avatar if they don't have one
+      if (!user.avatar) user.avatar = avatar;
+      ensureAdminRoleFromEmail(user);
       await user.save();
+    } else {
+      const roleChanged = ensureAdminRoleFromEmail(user);
+      if (roleChanged) {
+        await user.save();
+      }
     }
 
-    await ensureAdminRoleFromEmail(user);
-
-    res.json(buildAuthPayload(user));
+    return res.json(buildAuthPayload(user));
   } catch (error) {
-    res.status(400).json({ message: "Google authentication failed" });
+    return res.status(400).json({ message: "Google authentication failed" });
   }
 };
 
-// LOGIN
 export const loginUser = async (req, res) => {
   try {
     const { email, password } = req.body;
+    const normalizedEmail = normalizeEmail(email);
 
-    if (isAdminEmail(email) && isAdminPasswordValid(password)) {
-      let adminUser = await User.findOne({ email });
+    if (isAdminEmail(normalizedEmail) && isAdminPasswordValid(password)) {
+      let adminUser = await User.findOne({ email: normalizedEmail });
 
       if (!adminUser) {
         adminUser = await User.create({
-          name: adminNameFromEmail(email),
-          email,
+          name: adminNameFromEmail(normalizedEmail),
+          email: normalizedEmail,
           role: "admin",
           isVerified: true,
         });
@@ -202,7 +379,7 @@ export const loginUser = async (req, res) => {
           shouldSave = true;
         }
         if (!adminUser.name) {
-          adminUser.name = adminNameFromEmail(email);
+          adminUser.name = adminNameFromEmail(normalizedEmail);
           shouldSave = true;
         }
 
@@ -214,37 +391,58 @@ export const loginUser = async (req, res) => {
       return res.json(buildAuthPayload(adminUser));
     }
 
-    const user = await User.findOne({ email });
-    if (!user)
+    const user = await User.findOne({ email: normalizedEmail });
+    if (!user) {
       return res.status(400).json({ message: "Invalid credentials" });
+    }
 
     if (!user.password) {
       return res.status(400).json({ message: "Use Google sign-in for this account" });
     }
 
     const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch)
+    if (!isMatch) {
       return res.status(400).json({ message: "Invalid credentials" });
+    }
 
     if (!user.isVerified) {
-      // Generate a fresh OTP so the user can verify immediately
-      const otp = crypto.randomInt(100000, 999999).toString();
-      user.otp = otp;
-      user.otpExpires = Date.now() + 10 * 60 * 1000; // 10 minutes
-      await user.save();
+      if (isOtpLocked(user)) {
+        return res.status(429).json({
+          message: `Too many invalid OTP attempts. Try again in ${secondsUntilDate(user.otpLockUntil)}s.`,
+          isUnverified: true,
+          email: user.email,
+        });
+      }
 
-      await sendEmail(user.email, "Verify your CineCircle Account", otp);
+      let message = "Please verify your email. A verification OTP has been sent to your inbox.";
 
-      return res.status(401).json({ 
-        message: "Please verify your email. A new OTP has been sent to your inbox.",
+      if (canResendOtp(user) || isOtpExpired(user)) {
+        const otp = generateOtp();
+        setOtpState(user, otp);
+        await user.save();
+
+        try {
+          await queueOtpEmail(user.email, "CineCircle OTP Verification Code", otp);
+        } catch {
+          message = "Please verify your email. We could not send a new OTP right now. Try resend OTP shortly.";
+        }
+      } else {
+        message = `Please verify your email with your latest OTP, or request another OTP in ${getResendCooldownSeconds(user)}s.`;
+      }
+
+      return res.status(401).json({
+        message,
         isUnverified: true,
-        email: user.email 
+        email: user.email,
       });
     }
 
-    await ensureAdminRoleFromEmail(user);
-    res.json(buildAuthPayload(user));
+    if (ensureAdminRoleFromEmail(user)) {
+      await user.save();
+    }
+
+    return res.json(buildAuthPayload(user));
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    return res.status(500).json({ message: error.message });
   }
 };

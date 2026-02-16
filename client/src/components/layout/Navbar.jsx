@@ -1,11 +1,12 @@
 import { useState, useContext, useEffect } from "react";
-import { Link, NavLink } from "react-router-dom";
+import { Link, NavLink, useNavigate } from "react-router-dom";
 import { useGoogleLogin } from "@react-oauth/google";
 import { FaGoogle } from "react-icons/fa";
 import { AuthContext } from "../../context/AuthContext";
 import { NotificationContext } from "../../context/NotificationContext";
 
 const Navbar = () => {
+  const navigate = useNavigate();
   const [isOpen, setIsOpen] = useState(false);
   const [theme, setTheme] = useState(localStorage.getItem("theme") || "light");
   const { user, logout, loginWithGoogle } = useContext(AuthContext);
@@ -17,6 +18,8 @@ const Navbar = () => {
       setIsGoogleLoading(true);
       try {
         await loginWithGoogle(tokenResponse.access_token);
+        closeMenu();
+        navigate("/", { replace: true });
       } catch (error) {
         console.error("Google Login Error:", error);
       } finally {

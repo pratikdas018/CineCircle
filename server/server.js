@@ -25,7 +25,13 @@ import notificationRoutes from "./routes/notification.routes.js";
 import adminRoutes from "./routes/admin.routes.js";
 import clubRoutes from "./routes/club.routes.js";
 import availabilityAlertRoutes from "./routes/availabilityAlert.routes.js";
-
+import {
+  addOnlineUser,
+  emitToUser,
+  isUserOnline,
+  removeOnlineUserBySocket,
+  setSocketServer,
+} from "./utils/socketState.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -33,30 +39,25 @@ const __dirname = path.dirname(__filename);
 connectDB();
 startReminderJob();
 
-
 const app = express();
-
-// Trust proxy for accurate IP detection in production (Heroku, Render, Nginx, etc.)
 app.set("trust proxy", 1);
 
-const server = http.createServer(app); // 🔥 Create HTTP server for Socket.io
+const server = http.createServer(app);
 
-// 🛠️ Sanitize CLIENT_URL to remove trailing slash (CORS is sensitive to this)
 const clientUrl = process.env.CLIENT_URL ? process.env.CLIENT_URL.replace(/\/$/, "") : "";
-
-// 🔧 CORS Configuration
 const corsOptions = {
-  origin: process.env.NODE_ENV === "production" ? clientUrl : (origin, callback) => callback(null, true),
+  origin:
+    process.env.NODE_ENV === "production"
+      ? clientUrl
+      : (origin, callback) => callback(null, true),
   credentials: true,
 };
 
-// 🌍 Middlewares
 app.use(cors(corsOptions));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
-// 🛣️ API Routes
 app.use("/api/auth", authRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/movies", movieRoutes);
@@ -72,7 +73,6 @@ app.use("/api/admin", adminRoutes);
 app.use("/api/clubs", clubRoutes);
 app.use("/api/availability-alerts", availabilityAlertRoutes);
 
-// 📂 Multer Setup for Chat Images
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
     cb(null, path.join(__dirname, "uploads"));
@@ -83,42 +83,36 @@ const storage = multer.diskStorage({
 });
 const upload = multer({ storage });
 
-// 📤 Chat Image Upload Route
 app.post("/api/chat/upload", upload.single("image"), (req, res) => {
   if (!req.file) return res.status(400).json({ message: "No file uploaded" });
-  res.json({ filePath: `/uploads/${req.file.filename}` });
+  return res.json({ filePath: `/uploads/${req.file.filename}` });
 });
 
-// 🧪 Health Check Route
 app.get("/", (req, res) => {
-  res.send("🎬 CineCircle API is running...");
+  res.send("CineCircle API is running");
 });
 
-// 🚨 Global Error Handler (Production Best Practice)
 app.use((err, req, res, next) => {
   console.error(`Error: ${err.message}`);
   const statusCode = res.statusCode === 200 ? 500 : res.statusCode;
   res.status(statusCode).json({ message: err.message || "Internal Server Error" });
 });
 
-// ================= SOCKET.IO =================
 const io = new Server(server, {
   cors: corsOptions,
 });
-
-// Store online users
-let onlineUsers = {};
+setSocketServer(io);
 
 io.on("connection", (socket) => {
-  console.log("🟢 User connected:", socket.id);
+  console.log("User connected:", socket.id);
 
-  // User joins
   socket.on("addUser", (userId) => {
-    onlineUsers[userId] = socket.id;
-    io.emit("userOnline", userId);
+    const becameOnline = addOnlineUser(userId, socket.id);
+    if (becameOnline) {
+      io.emit("userOnline", String(userId));
+    }
   });
 
-  // Send message
   socket.on("sendMessage", async ({ senderId, receiverId, text, image, replyTo }) => {
     try {
       const message = await Message.create({
@@ -131,40 +125,25 @@ io.on("connection", (socket) => {
 
       await message.populate("replyTo");
 
-      // Send to receiver if online
-      const receiverSocket = onlineUsers[receiverId];
-      if (receiverSocket) {
-        io.to(receiverSocket).emit("receiveMessage", message);
-      }
-
-      // Send back to sender
+      emitToUser(receiverId, "receiveMessage", message);
       socket.emit("receiveMessage", message);
     } catch (error) {
       console.error("Socket message error:", error.message);
     }
   });
 
-  // Typing indicators
   socket.on("typing", ({ senderId, receiverId }) => {
-    const receiverSocket = onlineUsers[receiverId];
-    if (receiverSocket) {
-      io.to(receiverSocket).emit("typing", { senderId });
-    }
+    emitToUser(receiverId, "typing", { senderId });
   });
 
   socket.on("stopTyping", ({ senderId, receiverId }) => {
-    const receiverSocket = onlineUsers[receiverId];
-    if (receiverSocket) {
-      io.to(receiverSocket).emit("stopTyping", { senderId });
-    }
+    emitToUser(receiverId, "stopTyping", { senderId });
   });
 
-  // Check online status
   socket.on("checkOnlineStatus", (userId, callback) => {
-    callback(!!onlineUsers[userId]);
+    callback(isUserOnline(userId));
   });
 
-  // 👁️ Mark messages as seen
   socket.on("markMessagesSeen", async ({ senderId, receiverId }) => {
     try {
       await Message.updateMany(
@@ -172,16 +151,12 @@ io.on("connection", (socket) => {
         { $set: { seen: true } }
       );
 
-      const senderSocket = onlineUsers[senderId];
-      if (senderSocket) {
-        io.to(senderSocket).emit("messagesSeen", { senderId: receiverId });
-      }
+      emitToUser(senderId, "messagesSeen", { senderId: receiverId });
     } catch (error) {
       console.error("Error marking messages as seen:", error);
     }
   });
 
-  // ✏️ Edit Message
   socket.on("editMessage", async ({ messageId, newText }) => {
     try {
       const message = await Message.findById(messageId);
@@ -191,30 +166,20 @@ io.on("connection", (socket) => {
       message.isEdited = true;
       await message.save();
 
-      // Notify receiver
-      const receiverSocket = onlineUsers[message.receiver];
-      if (receiverSocket) {
-        io.to(receiverSocket).emit("messageUpdated", message);
-      }
-
-      // Notify sender (to update UI)
-      const senderSocket = onlineUsers[message.sender];
-      if (senderSocket) {
-        io.to(senderSocket).emit("messageUpdated", message);
-      }
+      emitToUser(message.receiver, "messageUpdated", message);
+      emitToUser(message.sender, "messageUpdated", message);
     } catch (error) {
       console.error("Error editing message:", error);
     }
   });
 
-  // ❤️ Toggle Reaction
   socket.on("toggleReaction", async ({ messageId, userId, emoji }) => {
     try {
       const message = await Message.findById(messageId);
       if (!message) return;
 
       const existingReactionIndex = message.reactions.findIndex(
-        (r) => r.user.toString() === userId && r.emoji === emoji
+        (reaction) => reaction.user.toString() === userId && reaction.emoji === emoji
       );
 
       if (existingReactionIndex > -1) {
@@ -225,17 +190,13 @@ io.on("connection", (socket) => {
 
       await message.save();
 
-      // Notify both parties
-      [message.sender, message.receiver].forEach(uid => {
-        const sock = onlineUsers[uid];
-        if (sock) io.to(sock).emit("messageReactionUpdated", message);
-      });
+      emitToUser(message.sender, "messageReactionUpdated", message);
+      emitToUser(message.receiver, "messageReactionUpdated", message);
     } catch (error) {
       console.error("Error toggling reaction:", error);
     }
   });
 
-  // 📌 Toggle Pin
   socket.on("togglePin", async ({ messageId }) => {
     try {
       const message = await Message.findById(messageId);
@@ -245,39 +206,29 @@ io.on("connection", (socket) => {
       await message.save();
       await message.populate("replyTo");
 
-      // Notify both parties
-      [message.sender, message.receiver].forEach(uid => {
-        const sock = onlineUsers[uid];
-        if (sock) io.to(sock).emit("messagePinned", message);
-      });
+      emitToUser(message.sender, "messagePinned", message);
+      emitToUser(message.receiver, "messagePinned", message);
     } catch (error) {
       console.error("Error toggling pin:", error);
     }
   });
 
-  // � Real-time Notifications
+  // Legacy client event support
   socket.on("sendNotification", ({ recipientId, senderName, type, movieTitle }) => {
-    const receiverSocket = onlineUsers[recipientId];
-    if (receiverSocket) {
-      io.to(receiverSocket).emit("getNotification", { senderName, type, movieTitle });
-    }
+    emitToUser(recipientId, "getNotification", { senderName, type, movieTitle });
   });
 
-  // User disconnects
   socket.on("disconnect", () => {
-    console.log("🔴 User disconnected:", socket.id);
-    for (const userId in onlineUsers) {
-      if (onlineUsers[userId] === socket.id) {
-        io.emit("userOffline", userId);
-        delete onlineUsers[userId];
-      }
+    console.log("User disconnected:", socket.id);
+    const { userId, becameOffline } = removeOnlineUserBySocket(socket.id);
+    if (becameOffline && userId) {
+      io.emit("userOffline", userId);
     }
   });
 });
-// ============================================
 
 const PORT = process.env.PORT || 5000;
 
 server.listen(PORT, "0.0.0.0", () => {
-  console.log(`🚀 Server running with Socket.io on port ${PORT}`);
+  console.log(`Server running with Socket.io on port ${PORT}`);
 });

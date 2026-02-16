@@ -10,6 +10,8 @@ const userSchema = new mongoose.Schema(
       type: String,
       required: true,
       unique: true,
+      trim: true,
+      lowercase: true,
     },
     password: {
       type: String,
@@ -35,7 +37,23 @@ const userSchema = new mongoose.Schema(
       type: String,
       required: false,
     },
+    otpHash: {
+      type: String,
+      required: false,
+    },
     otpExpires: {
+      type: Date,
+      required: false,
+    },
+    otpAttempts: {
+      type: Number,
+      default: 0,
+    },
+    otpLockUntil: {
+      type: Date,
+      required: false,
+    },
+    otpLastSentAt: {
       type: Date,
       required: false,
     },

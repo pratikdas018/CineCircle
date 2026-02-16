@@ -1,11 +1,12 @@
 import { useContext, useEffect, useState } from "react";
 import { AuthContext } from "../context/AuthContext";
 import api from "../services/api";
-import { useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "react-hot-toast";
 
 const Profile = () => {
   const { user, updateUser } = useContext(AuthContext);
+  const navigate = useNavigate();
   const { id } = useParams();
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -14,6 +15,16 @@ const Profile = () => {
   const isOwnProfile = !id || id === user?._id;
 
   useEffect(() => {
+    if (!user) {
+      navigate("/login", { replace: true });
+    }
+  }, [user, navigate]);
+
+  useEffect(() => {
+    if (!user) {
+      return;
+    }
+
     const endpoint = isOwnProfile ? "/api/users/profile" : `/api/users/${id}`;
     api.get(endpoint)
       .then((res) => {
@@ -22,7 +33,7 @@ const Profile = () => {
       })
       .catch((err) => console.error(err))
       .finally(() => setLoading(false));
-  }, [id]);
+  }, [id, isOwnProfile, user]);
 
   const handleSave = async () => {
     try {

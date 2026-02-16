@@ -5,15 +5,11 @@ import Recommendations from "../components/movie/Recommendations";
 import { AuthContext } from "../context/AuthContext";
 import { toast } from "react-hot-toast";
 import { formatDistanceToNow } from "date-fns";
-import { NotificationContext } from "../context/NotificationContext";
-import { SocketContext } from "../context/SocketContext";
 import PageTransition from "../components/layout/PageTransition";
 import MentionWithPreview from "../components/movie/MentionWithPreview";
 
 const Home = () => {
   const { user } = useContext(AuthContext);
-  const { setUnreadCount } = useContext(NotificationContext);
-  const socket = useContext(SocketContext);
   const navigate = useNavigate();
 
   const [query, setQuery] = useState("");
@@ -65,22 +61,6 @@ const Home = () => {
     }
   }, [user]);
 
-  // 🔔 Listen for real-time notifications to play sound
-  useEffect(() => {
-    if (!socket) return;
-
-    const handleNotification = () => {
-      const audio = new Audio("/notification.mp3");
-      audio.play().catch(err => console.error("Error playing notification sound:", err));
-    };
-
-    socket.on("getNotification", handleNotification);
-
-    return () => {
-      socket.off("getNotification", handleNotification);
-    };
-  }, [socket]);
-
   // 🎬 Load initial movies to avoid a blank page
   useEffect(() => {
     const fetchInitialMovies = async () => {
@@ -124,16 +104,6 @@ const Home = () => {
         prev.map((r) => (r._id === reviewId ? { ...r, likes: res.data.likes } : r))
       );
 
-      // 📡 Emit socket event to notify the owner
-      const review = feed.find(f => f._id === reviewId);
-      if (review.user._id !== user._id) {
-        socket.emit("sendNotification", {
-          recipientId: review.user._id,
-          senderName: user.name,
-          type: "like",
-          movieTitle: review.movieTitle
-        });
-      }
     } catch (err) {
       toast.error("Failed to update like.");
     }
@@ -154,29 +124,6 @@ const Home = () => {
         prev.map((r) => (r._id === reviewId ? { ...r, comments: res.data.comments } : r))
       );
 
-      // 📡 Emit socket event to notify the owner
-      const review = feed.find(f => f._id === reviewId);
-      if (review.user._id !== user._id) {
-        socket.emit("sendNotification", {
-          recipientId: review.user._id,
-          senderName: user.name,
-          type: "comment",
-          movieTitle: review.movieTitle
-        });
-      }
-
-      // 📣 Emit socket events for mentions
-      if (res.data.mentionedUsers) {
-        res.data.mentionedUsers.forEach(mUser => {
-          socket.emit("sendNotification", {
-            recipientId: mUser._id,
-            senderName: user.name,
-            type: "mention",
-            movieTitle: review.movieTitle
-          });
-        });
-      }
-
       setCommentText("");
       toast.success("Comment posted!");
     } catch (err) {
@@ -191,29 +138,6 @@ const Home = () => {
       setFeed((prev) =>
         prev.map((r) => (r._id === reviewId ? { ...r, comments: res.data.comments } : r))
       );
-
-      // 📡 Emit socket event to notify the owner
-      const review = feed.find(f => f._id === reviewId);
-      if (review.user._id !== user._id) {
-        socket.emit("sendNotification", {
-          recipientId: review.user._id,
-          senderName: user.name,
-          type: "comment",
-          movieTitle: review.movieTitle
-        });
-      }
-
-      // 📣 Emit socket events for mentions
-      if (res.data.mentionedUsers) {
-        res.data.mentionedUsers.forEach(mUser => {
-          socket.emit("sendNotification", {
-            recipientId: mUser._id,
-            senderName: user.name,
-            type: "mention",
-            movieTitle: review.movieTitle
-          });
-        });
-      }
 
       setEditingComment(null);
       setEditText("");
