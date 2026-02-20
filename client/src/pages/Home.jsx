@@ -294,13 +294,13 @@ const Home = () => {
 
   return (
     <PageTransition>
-      <div className="min-h-screen bg-transparent text-slate-900 dark:text-slate-100 p-4 md:p-8 transition-colors duration-500">
+      <div className="min-h-screen w-full overflow-x-hidden bg-transparent px-3 py-4 text-slate-900 transition-colors duration-500 dark:text-slate-100 sm:px-5 md:px-8 md:py-8 lg:px-12">
       <div className="max-w-7xl mx-auto">
         <header className="text-center mb-12">
-          <h1 className="text-4xl md:text-6xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-rose-500 to-orange-500 mb-4 drop-shadow-lg">
+          <h1 className="mb-4 bg-gradient-to-r from-rose-500 to-orange-500 bg-clip-text text-3xl font-extrabold text-transparent drop-shadow-lg sm:text-4xl md:text-5xl lg:text-6xl">
             🎬 CineCircle
           </h1>
-          <p className="text-slate-500 dark:text-slate-400 text-lg md:text-xl">Discover, Track, and Share your favorite movies.</p>
+          <p className="text-base text-slate-500 dark:text-slate-400 sm:text-lg md:text-xl">Discover, Track, and Share your favorite movies.</p>
         </header>
 
         {error && (
@@ -311,9 +311,9 @@ const Home = () => {
         )}
 
         {/* 🔍 Search */}
-        <div className="flex flex-col sm:flex-row justify-center items-center gap-4 mb-16">
+        <div className="mb-16 flex w-full flex-col items-stretch justify-center gap-4 sm:flex-row sm:items-center">
           <input
-            className="w-full max-w-2xl bg-white dark:bg-slate-900/50 backdrop-blur-sm text-slate-900 dark:text-white border border-slate-200 dark:border-slate-800 rounded-full px-6 py-4 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all shadow-sm text-lg placeholder-slate-400 dark:placeholder-slate-500"
+            className="w-full max-w-2xl rounded-full border border-slate-200 bg-white px-5 py-3 text-base text-slate-900 shadow-sm transition-all placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:border-slate-800 dark:bg-slate-900/50 dark:text-white dark:placeholder-slate-500 sm:px-6 sm:py-4 sm:text-lg"
             placeholder="Search for movies..."
             value={query}
             onChange={(e) => setQuery(e.target.value)}
@@ -321,7 +321,7 @@ const Home = () => {
           />
           <button
             onClick={searchMovies}
-            className="w-full sm:w-auto bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-500 hover:to-indigo-600 text-white font-bold py-3 px-10 rounded-full shadow-lg transform transition hover:scale-105 active:scale-95"
+            className="w-full rounded-full bg-gradient-to-r from-indigo-600 to-indigo-700 px-8 py-3 font-bold text-white shadow-lg transition hover:from-indigo-500 hover:to-indigo-600 active:scale-95 sm:w-auto sm:px-10 sm:hover:scale-105"
           >
             Search
           </button>
@@ -339,7 +339,7 @@ const Home = () => {
               movies.length > 0 && (
                 <section className="mb-16 animate-fade-in">
                   <h2 className="text-3xl font-bold mb-8 border-l-4 border-rose-500 pl-4">🎥 Search Results</h2>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 md:gap-8">
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 md:gap-6 lg:grid-cols-4 lg:gap-8 xl:grid-cols-5">
                     {movies.map((movie) => (
                       <Link key={movie.imdbID} to={`/movie/${movie.imdbID}`} className="group">
                         <div className="bg-white dark:bg-slate-900 rounded-xl overflow-hidden shadow-sm hover:shadow-indigo-500/10 dark:hover:shadow-indigo-500/20 transition-all duration-300 group-hover:-translate-y-2 h-full flex flex-col border border-slate-200 dark:border-slate-800">
@@ -353,7 +353,7 @@ const Home = () => {
                             <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-20 transition-all duration-300"></div>
                           </div>
                           <div className="p-4 flex-grow flex flex-col justify-between bg-white dark:bg-slate-900">
-                            <h3 className="font-semibold text-lg leading-tight mb-1 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors text-slate-900 dark:text-slate-100">{movie.Title}</h3>
+                            <h3 className="mb-1 line-clamp-2 break-words text-base font-semibold leading-tight text-slate-900 transition-colors group-hover:text-indigo-600 dark:text-slate-100 dark:group-hover:text-indigo-400 sm:text-lg">{movie.Title}</h3>
                             <p className="text-gray-500 text-sm">{movie.Year}</p>
                           </div>
                         </div>
@@ -368,7 +368,7 @@ const Home = () => {
                 {trendingMovies.length > 0 && (
                   <section className="mb-16 animate-fade-in">
                     <h2 className="text-3xl font-bold mb-8 border-l-4 border-orange-500 pl-4">📈 Trending Now</h2>
-                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 md:gap-8">
+                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 md:gap-6 lg:grid-cols-4 lg:gap-8 xl:grid-cols-5">
                       {trendingMovies.map((movie) => (
                         <Link key={movie.imdbID} to={`/movie/${movie.imdbID}`} className="group">
                           <div className="bg-white dark:bg-slate-900 rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-all duration-300 group-hover:-translate-y-2 h-full flex flex-col border border-slate-200 dark:border-slate-800">
@@ -382,7 +382,7 @@ const Home = () => {
                               <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-20 transition-all duration-300"></div>
                             </div>
                             <div className="p-4 flex-grow flex flex-col justify-between bg-white dark:bg-slate-900">
-                              <h3 className="font-semibold text-lg leading-tight mb-1 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors text-slate-900 dark:text-slate-100">{movie.Title}</h3>
+                              <h3 className="mb-1 line-clamp-2 break-words text-base font-semibold leading-tight text-slate-900 transition-colors group-hover:text-indigo-600 dark:text-slate-100 dark:group-hover:text-indigo-400 sm:text-lg">{movie.Title}</h3>
                               <p className="text-gray-500 text-sm">{movie.Year}</p>
                             </div>
                           </div>
@@ -395,7 +395,7 @@ const Home = () => {
                 {exploreMovies.length > 0 && (
                   <section className="mb-16 animate-fade-in">
                     <h2 className="text-3xl font-bold mb-8 border-l-4 border-red-500 pl-4">🔥 Explore Movies</h2>
-                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 md:gap-8">
+                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 md:gap-6 lg:grid-cols-4 lg:gap-8 xl:grid-cols-5">
                       {exploreMovies.map((movie) => (
                         <Link key={movie.imdbID} to={`/movie/${movie.imdbID}`} className="group">
                           <div className="bg-white dark:bg-slate-900 rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-all duration-300 group-hover:-translate-y-2 h-full flex flex-col border border-slate-200 dark:border-slate-800">
@@ -409,7 +409,7 @@ const Home = () => {
                               <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-20 transition-all duration-300"></div>
                             </div>
                             <div className="p-4 flex-grow flex flex-col justify-between bg-white dark:bg-slate-900">
-                              <h3 className="font-semibold text-lg leading-tight mb-1 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors text-slate-900 dark:text-slate-100">{movie.Title}</h3>
+                              <h3 className="mb-1 line-clamp-2 break-words text-base font-semibold leading-tight text-slate-900 transition-colors group-hover:text-indigo-600 dark:text-slate-100 dark:group-hover:text-indigo-400 sm:text-lg">{movie.Title}</h3>
                               <p className="text-gray-500 text-sm">{movie.Year}</p>
                             </div>
                           </div>
@@ -434,7 +434,7 @@ const Home = () => {
         ) : user && feed.length > 0 && (
           <section className="mb-12">
             <h2 className="text-3xl font-bold mb-8 border-l-4 border-indigo-500 pl-4">📰 Friends Activity</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 lg:gap-6 xl:grid-cols-4">
               {feed.map((r) => (
                 <div key={r._id} className="bg-white dark:bg-slate-900/40 backdrop-blur-sm p-6 rounded-2xl shadow-sm hover:shadow-md transition-all border border-slate-200 dark:border-slate-800 flex flex-col gap-4 group">
                   <div className="border-b border-slate-100 dark:border-slate-800/50 pb-3">
@@ -467,9 +467,9 @@ const Home = () => {
                     </div>
                   </div>
 
-                  <p className="text-slate-600 dark:text-slate-300 italic leading-relaxed bg-slate-50/50 dark:bg-slate-950/40 p-3 rounded-xl border border-slate-100 dark:border-slate-800/30">"{renderTextWithMentions(r.comment)}"</p>
+                  <p className="break-words whitespace-normal rounded-xl border border-slate-100 bg-slate-50/50 p-3 italic leading-relaxed text-slate-600 dark:border-slate-800/30 dark:bg-slate-950/40 dark:text-slate-300">"{renderTextWithMentions(r.comment)}"</p>
                   
-                  <div className="mt-auto pt-3 border-t border-slate-100 dark:border-slate-800/50 flex items-center justify-between">
+                  <div className="mt-auto flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-3 dark:border-slate-800/50">
                     <div className="flex items-center gap-2">
                       <button
                         onClick={() => handleLike(r._id)}

@@ -44,6 +44,21 @@ const parseModelJson = (rawText = "") => {
     // ignore parse error and fallback below
   }
 
+  // Try parsing an object slice when model adds extra text around JSON.
+  const firstBrace = fenced.indexOf("{");
+  const lastBrace = fenced.lastIndexOf("}");
+  if (firstBrace > -1 && lastBrace > firstBrace) {
+    const objectSlice = fenced.slice(firstBrace, lastBrace + 1);
+    try {
+      const parsed = JSON.parse(objectSlice);
+      if (parsed && typeof parsed === "object") {
+        return parsed;
+      }
+    } catch {
+      // ignore parse error and fallback below
+    }
+  }
+
   return null;
 };
 
@@ -52,6 +67,38 @@ const normalizeModelName = (modelName) =>
   String(modelName || "")
     .trim()
     .replace(/^models\//i, "");
+const isLikelyTruncated = (text = "") => {
+  const value = String(text || "").trim();
+  if (!value) return true;
+  if (value.length < 80) return true;
+  if (/[\\{]$/.test(value)) return true;
+  return false;
+};
+
+const cleanExtractedValue = (value = "") =>
+  String(value || "")
+    .trim()
+    .replace(/^["']/, "")
+    .replace(/["']\s*,?\s*$/, "")
+    .replace(/\s*}\s*$/, "")
+    .replace(/\\n/g, "\n")
+    .replace(/\\"/g, '"')
+    .trim();
+
+const extractFieldsFromJsonLikeText = (rawText = "") => {
+  const text = String(rawText || "").trim();
+  if (!text) return { subject: "", body: "" };
+
+  const subjectMatch = text.match(
+    /["']subject["']\s*:\s*([\s\S]*?)(?=,\s*["']body["']\s*:|\n\s*["']body["']\s*:|$)/i
+  );
+  const bodyMatch = text.match(/["']body["']\s*:\s*([\s\S]*)/i);
+
+  return {
+    subject: cleanExtractedValue(subjectMatch?.[1] || ""),
+    body: cleanExtractedValue(bodyMatch?.[1] || ""),
+  };
+};
 
 const fallbackFromText = (rawText, emailType) => {
   const title = EMAIL_TYPE_TITLES[emailType] || "General Update";
@@ -69,12 +116,11 @@ const fallbackFromText = (rawText, emailType) => {
     };
   }
 
-  const subjectMatch = text.match(/subject\s*:\s*(.+)/i);
-  const bodyMatch = text.match(/body\s*:\s*([\s\S]+)/i);
+  const extracted = extractFieldsFromJsonLikeText(text);
 
   return {
-    subject: (subjectMatch?.[1] || defaultSubject).trim(),
-    body: (bodyMatch?.[1] || text).trim(),
+    subject: extracted.subject || defaultSubject,
+    body: extracted.body || text,
   };
 };
 
@@ -109,6 +155,7 @@ Rules:
 - Subject: professional and concise.
 - Body: polished and user-friendly.
 - Do not include placeholders like [Name].
+ - Body must be complete with greeting, main offer details, call to action, and sign-off.
   `.trim();
 
   let lastError = null;
@@ -129,7 +176,9 @@ Rules:
           ],
           generationConfig: {
             temperature: 0.6,
-            maxOutputTokens: 900,
+            maxOutputTokens: 1200,
+            responseMimeType: "application/json",
+            thinkingConfig: { thinkingBudget: 0 },
           },
         },
         { timeout: 30000 }
@@ -144,14 +193,22 @@ Rules:
       const parsed = parseModelJson(rawText);
       const parsedSubject = String(parsed?.subject || "").trim();
       const parsedBody = String(parsed?.body || "").trim();
-      if (isNonEmptyString(parsedSubject) && isNonEmptyString(parsedBody)) {
+      if (
+        isNonEmptyString(parsedSubject) &&
+        isNonEmptyString(parsedBody) &&
+        !isLikelyTruncated(parsedBody)
+      ) {
         return {
           subject: parsedSubject,
           body: parsedBody,
         };
       }
 
-      return fallbackFromText(rawText, emailType);
+      const fallbackFromRaw = fallbackFromText(rawText, emailType);
+      if (!isLikelyTruncated(fallbackFromRaw.body)) {
+        return fallbackFromRaw;
+      }
+      continue;
     } catch (error) {
       lastError = error;
       const status = error?.response?.status;

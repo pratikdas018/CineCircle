@@ -1,5 +1,6 @@
 import { useState, useContext, useEffect } from "react";
 import { useNavigate, Link, useLocation } from "react-router-dom";
+import { FaEye, FaEyeSlash } from "react-icons/fa";
 import api from "../../services/api";
 import { AuthContext } from "../../context/AuthContext";
 
@@ -10,6 +11,7 @@ const Login = () => {
   const [form, setForm] = useState({ email: "", password: "" });
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const redirectTo = location.state?.from || "/";
 
   useEffect(() => {
@@ -38,8 +40,8 @@ const Login = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 to-black flex items-center justify-center p-4">
-      <div className="bg-gray-800 p-8 rounded-2xl shadow-2xl w-full max-w-md border border-gray-700">
+    <div className="min-h-screen w-full overflow-x-hidden bg-gradient-to-br from-gray-900 to-black px-3 py-6 sm:px-5 md:px-8 lg:px-12 flex items-center justify-center">
+      <div className="w-full max-w-md rounded-2xl border border-gray-700 bg-gray-800 p-5 shadow-2xl sm:p-8">
         <h2 className="text-3xl font-bold text-white mb-6 text-center">Welcome Back</h2>
         
         {error && (
@@ -65,13 +67,23 @@ const Login = () => {
                 Forgot password?
               </Link>
             </div>
-            <input 
-              id="password"
-              type="password" 
-              placeholder="Enter your password" 
-              className="w-full bg-gray-900 text-white border border-gray-600 rounded-lg px-4 py-3 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all placeholder-gray-500"
-              onChange={(e) => setForm({ ...form, password: e.target.value })} 
-            />
+            <div className="relative">
+              <input 
+                id="password"
+                type={showPassword ? "text" : "password"} 
+                placeholder="Enter your password" 
+                className="w-full bg-gray-900 text-white border border-gray-600 rounded-lg px-4 py-3 pr-11 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all placeholder-gray-500"
+                onChange={(e) => setForm({ ...form, password: e.target.value })} 
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword((prev) => !prev)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-200 transition-colors"
+                aria-label={showPassword ? "Hide password" : "Show password"}
+              >
+                {showPassword ? <FaEyeSlash /> : <FaEye />}
+              </button>
+            </div>
           </div>
           <button 
             disabled={loading}

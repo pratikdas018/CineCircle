@@ -240,9 +240,9 @@ const ReviewSection = ({ movieId, movieTitle, onReviewAdded, onStatsUpdate, filt
   };
 
   return (
-    <div className="mt-8">
+    <div className="mt-8 w-full overflow-x-hidden">
       {user ? (
-        <div className="bg-gray-800 p-6 rounded-xl shadow-lg border border-gray-700 mb-8">
+        <div className="mb-8 rounded-xl border border-gray-700 bg-gray-800 p-4 shadow-lg sm:p-6">
       <h3 className="text-xl font-bold text-white mb-4">Write a Review</h3>
       
       {error && <p className="text-red-400 mb-2">{error}</p>}
@@ -268,7 +268,7 @@ const ReviewSection = ({ movieId, movieTitle, onReviewAdded, onStatsUpdate, filt
             value={comment}
             onChange={handleCommentChange}
             placeholder="Share your thoughts..."
-            className="w-full bg-gray-900 text-white p-3 rounded border border-gray-600 focus:border-blue-500 outline-none h-24 resize-none"
+            className="h-24 w-full resize-y rounded border border-gray-600 bg-gray-900 p-3 text-white outline-none focus:border-blue-500"
           />
           {showMentions && (
             <div className="absolute bottom-full left-0 w-full bg-gray-800 border border-gray-700 rounded-lg shadow-xl mb-1 z-50 max-h-40 overflow-y-auto">
@@ -297,7 +297,7 @@ const ReviewSection = ({ movieId, movieTitle, onReviewAdded, onStatsUpdate, filt
 
         <div>
           <label className="block text-gray-400 text-sm mb-2">Add a Photo (Optional)</label>
-          <div className="flex items-center gap-4">
+          <div className="flex flex-wrap items-center gap-3">
             <label className="cursor-pointer bg-gray-700 hover:bg-gray-600 text-white px-4 py-2 rounded-lg transition-colors text-sm font-medium flex items-center gap-2">
               <span>📷 Choose Image</span>
               <input type="file" accept="image/*" onChange={handleImageChange} className="hidden" />
@@ -326,12 +326,12 @@ const ReviewSection = ({ movieId, movieTitle, onReviewAdded, onStatsUpdate, filt
       </form>
         </div>
       ) : (
-        <div className="bg-gray-800 p-6 rounded-xl border border-gray-700 text-center mb-8">
+        <div className="mb-8 rounded-xl border border-gray-700 bg-gray-800 p-4 text-center sm:p-6">
           <p className="text-gray-400">Please login to write a review.</p>
         </div>
       )}
 
-      <h3 className="text-2xl font-bold text-white mb-6">
+      <h3 className="mb-6 break-words text-2xl font-bold text-white">
         {filterRating ? `${filterRating} Star Reviews` : "Reviews"}
       </h3>
       <div className="space-y-6">
@@ -345,8 +345,8 @@ const ReviewSection = ({ movieId, movieTitle, onReviewAdded, onStatsUpdate, filt
           }
 
           return filteredReviews.map((review) => (
-            <div key={review._id} className="bg-gray-800 p-6 rounded-xl border border-gray-700">
-              <div className="flex items-center justify-between mb-4">
+            <div key={review._id} className="rounded-xl border border-gray-700 bg-gray-800 p-4 sm:p-6">
+              <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center font-bold text-white overflow-hidden">
                     {review.user?.avatar ? (
@@ -391,14 +391,14 @@ const ReviewSection = ({ movieId, movieTitle, onReviewAdded, onStatsUpdate, filt
                 </div>
               </div>
 
-              <p className="text-gray-300 mb-4 leading-relaxed">{renderTextWithMentions(review.comment)}</p>
+              <p className="mb-4 break-words whitespace-normal leading-relaxed text-gray-300">{renderTextWithMentions(review.comment)}</p>
 
               {review.image && (
                 <div className="mt-4">
                   <img
                     src={getImageUrl(review.image)}
                     alt="Review attachment"
-                    className="rounded-lg max-h-64 object-cover border border-gray-600 cursor-pointer hover:opacity-90 transition-opacity"
+                    className="h-auto max-h-64 w-full rounded-lg border border-gray-600 object-cover transition-opacity hover:opacity-90"
                     onClick={() =>
                       setSelectedImage(getImageUrl(review.image))
                     }
@@ -406,7 +406,7 @@ const ReviewSection = ({ movieId, movieTitle, onReviewAdded, onStatsUpdate, filt
                 </div>
               )}
 
-              <div className="mt-4 pt-4 border-t border-gray-700/50 flex items-center gap-4">
+              <div className="mt-4 flex flex-wrap items-center gap-4 border-t border-gray-700/50 pt-4">
                 <button
                   onClick={() => handleLike(review._id)}
                   className={`flex items-center gap-2 px-3 py-1.5 rounded-lg transition-all ${
@@ -426,7 +426,7 @@ const ReviewSection = ({ movieId, movieTitle, onReviewAdded, onStatsUpdate, filt
 
       {selectedImage && (
         <div 
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-4 backdrop-blur-sm"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-3 backdrop-blur-sm sm:p-4"
           onClick={() => setSelectedImage(null)}
         >
           <button
@@ -438,7 +438,7 @@ const ReviewSection = ({ movieId, movieTitle, onReviewAdded, onStatsUpdate, filt
           <img
             src={selectedImage}
             alt="Full size review"
-            className="max-w-full max-h-[90vh] object-contain rounded-lg shadow-2xl"
+            className="h-auto max-h-[90vh] w-full max-w-sm rounded-lg object-contain shadow-2xl sm:max-w-full"
             onClick={(e) => e.stopPropagation()}
           />
         </div>

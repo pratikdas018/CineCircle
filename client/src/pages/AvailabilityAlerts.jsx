@@ -50,7 +50,7 @@ const AvailabilityAlerts = () => {
 
   return (
     <PageTransition>
-      <div className="min-h-screen bg-transparent text-slate-900 dark:text-slate-100 p-4 md:p-8 transition-colors duration-500">
+      <div className="min-h-screen w-full overflow-x-hidden bg-transparent px-3 py-4 text-slate-900 transition-colors duration-500 dark:text-slate-100 sm:px-5 md:px-8 md:py-8 lg:px-12">
         <div className="max-w-4xl mx-auto">
           <h1 className="text-3xl font-bold mb-6 border-l-4 border-indigo-500 pl-4">
             OTT Availability Alerts
@@ -66,7 +66,7 @@ const AvailabilityAlerts = () => {
                   <Link to={`/movie/${alert.movieId}`} className="font-bold hover:underline">
                     {alert.movieTitle}
                   </Link>
-                  <p className="text-sm text-slate-500">
+                  <p className="break-words text-sm text-slate-500">
                     Platform: {alert.providerName} • Region: {alert.region}
                   </p>
                   <p className="text-xs mt-1">

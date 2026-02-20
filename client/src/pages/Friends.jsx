@@ -172,13 +172,13 @@ const Friends = () => {
   }
 
   return (
-    <div className="min-h-screen bg-transparent text-slate-900 dark:text-slate-100 p-4 md:p-8 transition-colors duration-500">
-      <div className="max-w-4xl mx-auto">
+    <div className="min-h-screen w-full overflow-x-hidden bg-transparent px-3 py-4 text-slate-900 transition-colors duration-500 dark:text-slate-100 sm:px-5 md:px-8 md:py-8 lg:px-12">
+      <div className="mx-auto w-full max-w-7xl">
         <h1 className="text-3xl font-bold mb-8 border-l-4 border-indigo-500 pl-4">Friends</h1>
 
         <section className="bg-white dark:bg-slate-900 p-5 rounded-xl border border-slate-200 dark:border-slate-800 mb-6">
           <h2 className="text-xl font-bold mb-4">Discover Users</h2>
-          <div className="flex gap-2">
+          <div className="flex flex-col gap-2 sm:flex-row">
             <input
               value={discoverQuery}
               onChange={(e) => setDiscoverQuery(e.target.value)}
@@ -188,7 +188,7 @@ const Friends = () => {
             />
             <button
               onClick={searchUsers}
-              className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg font-semibold"
+              className="w-full rounded-lg bg-indigo-600 px-4 py-2 font-semibold text-white hover:bg-indigo-700 sm:w-auto"
             >
               Search
             </button>
@@ -198,7 +198,7 @@ const Friends = () => {
               {discoverResults.map((u) => (
                 <div
                   key={u._id}
-                  className="flex items-center justify-between bg-slate-50 dark:bg-slate-800/70 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2"
+                  className="flex flex-col gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 dark:border-slate-700 dark:bg-slate-800/70 sm:flex-row sm:items-center sm:justify-between"
                 >
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-full bg-gradient-to-br from-indigo-500 to-purple-500 overflow-hidden flex items-center justify-center text-white font-bold">
@@ -243,13 +243,13 @@ const Friends = () => {
               {incomingRequests.map((requester) => (
                 <div
                   key={requester._id}
-                  className="flex items-center justify-between bg-slate-50 dark:bg-slate-800/70 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2"
+                  className="flex flex-col gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 dark:border-slate-700 dark:bg-slate-800/70 sm:flex-row sm:items-center sm:justify-between"
                 >
                   <div>
                     <p className="font-semibold">{requester.name}</p>
                     <p className="text-xs text-slate-500">{requester.email}</p>
                   </div>
-                  <div className="flex gap-2">
+                  <div className="flex flex-wrap gap-2">
                     <button
                       onClick={() => acceptRequest(requester._id)}
                       disabled={actionLoadingId === requester._id}
@@ -280,7 +280,7 @@ const Friends = () => {
               {outgoingRequests.map((target) => (
                 <div
                   key={target._id}
-                  className="flex items-center justify-between bg-slate-50 dark:bg-slate-800/70 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2"
+                  className="flex flex-col gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 dark:border-slate-700 dark:bg-slate-800/70 sm:flex-row sm:items-center sm:justify-between"
                 >
                   <div>
                     <p className="font-semibold">{target.name}</p>
@@ -304,13 +304,13 @@ const Friends = () => {
             <p className="text-xl">You haven't added any friends yet.</p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
             {friends.map((friend) => (
               <div
                 key={friend._id}
-                className="bg-white dark:bg-slate-900 p-4 rounded-xl shadow-sm hover:shadow-md transition-all border border-slate-200 dark:border-slate-800 flex items-center justify-between group"
+                className="group flex h-full flex-col gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition-all hover:shadow-md dark:border-slate-800 dark:bg-slate-900"
               >
-                <Link to={`/chat/${friend._id}`} className="flex items-center gap-4 min-w-0 flex-1">
+                <Link to={`/chat/${friend._id}`} className="flex min-w-0 flex-1 items-center gap-3">
                   <div className="relative">
                     <div className="w-12 h-12 rounded-full bg-gradient-to-br from-indigo-500 to-purple-500 flex items-center justify-center text-white font-bold text-lg overflow-hidden">
                       {friend.avatar ? (
@@ -336,7 +336,7 @@ const Friends = () => {
                   </div>
                 </Link>
 
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   {friend.unreadCount > 0 && (
                     <div className="bg-rose-500 text-white text-xs font-bold px-3 py-1 rounded-full animate-pulse shadow-lg shadow-rose-500/30">
                       {friend.unreadCount}

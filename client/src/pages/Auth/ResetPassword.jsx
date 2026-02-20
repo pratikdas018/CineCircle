@@ -57,8 +57,8 @@ const ResetPassword = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 to-black flex items-center justify-center p-4">
-      <div className="bg-gray-800 p-8 rounded-2xl shadow-2xl w-full max-w-md border border-gray-700">
+    <div className="min-h-screen w-full overflow-x-hidden bg-gradient-to-br from-gray-900 to-black px-3 py-6 sm:px-5 md:px-8 lg:px-12 flex items-center justify-center">
+      <div className="w-full max-w-md rounded-2xl border border-gray-700 bg-gray-800 p-5 shadow-2xl sm:p-8">
         <h2 className="text-3xl font-bold text-white mb-4 text-center">Reset Password</h2>
         <p className="text-gray-400 text-sm text-center mb-6">
           Set a new password for your CineCircle account.

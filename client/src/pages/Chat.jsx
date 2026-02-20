@@ -400,11 +400,11 @@ const Chat = () => {
   const displayedMessages = isSearchOpen && searchQuery ? searchResults : messages;
 
   return (
-    <div className="h-[100dvh] bg-transparent text-slate-900 dark:text-slate-100 p-2 md:p-8 flex flex-col transition-all duration-500 ease-in-out overflow-hidden">
-      <div className="max-w-4xl mx-auto w-full flex-1 flex flex-col bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 overflow-hidden transition-all duration-500">
+    <div className="h-[100dvh] w-full overflow-hidden bg-transparent px-1 py-2 text-slate-900 transition-all duration-500 ease-in-out dark:text-slate-100 sm:px-3 md:px-8">
+      <div className="mx-auto flex w-full max-w-4xl flex-1 flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition-all duration-500 dark:border-slate-800 dark:bg-slate-900">
         
         {/* Header */}
-        <div className="p-4 bg-slate-100 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700 flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 bg-slate-100 p-3 dark:border-slate-700 dark:bg-slate-900 sm:gap-3 sm:p-4">
           {friend ? (
             <>
               <div className="relative">
@@ -419,8 +419,8 @@ const Chat = () => {
                   <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-white dark:border-slate-900 rounded-full shadow-sm"></div>
                 )}
               </div>
-              <div>
-                <h2 className="font-bold text-lg leading-none">{friend.name}</h2>
+              <div className="min-w-0">
+                <h2 className="truncate text-base font-bold leading-none sm:text-lg">{friend.name}</h2>
                 <p className={`text-xs font-medium mt-0.5 ${isOnline ? "text-green-500" : "text-gray-500 dark:text-gray-400"}`}>
                   {isOnline ? "Online" : "Offline"}
                 </p>
@@ -456,7 +456,7 @@ const Chat = () => {
         </div>
 
         {isSearchOpen && (
-          <div className="px-4 py-2 bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-700 flex items-center gap-2 animate-fade-in">
+          <div className="flex items-center gap-2 border-b border-slate-200 bg-slate-50 px-3 py-2 animate-fade-in dark:border-slate-700 dark:bg-slate-800/50 sm:px-4">
             <input
               type="text"
               value={searchQuery}
@@ -492,10 +492,10 @@ const Chat = () => {
           ) : (
             displayedMessages.map((m, i) => (
               <div key={i} className={`flex ${m.sender === user._id ? "justify-end" : "justify-start"}`}>
-                <div className={`max-w-[85%] md:max-w-md py-3 rounded-2xl shadow-md transition-all relative group ${
+                <div className={`group relative max-w-[90%] rounded-2xl py-3 shadow-md transition-all sm:max-w-[85%] md:max-w-md ${
                   m.sender === user._id 
-                    ? "bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-br-none pl-5 pr-48" 
-                    : "bg-slate-200 dark:bg-slate-700 text-slate-900 dark:text-slate-100 rounded-bl-none pl-5 pr-36"
+                    ? "rounded-br-none bg-gradient-to-r from-blue-600 to-blue-500 pl-4 pr-12 text-white sm:pl-5 sm:pr-48" 
+                    : "rounded-bl-none bg-slate-200 pl-4 pr-12 text-slate-900 dark:bg-slate-700 dark:text-slate-100 sm:pl-5 sm:pr-36"
                 }`}>
                   {editingMessageId === m._id ? (
                     <div className="flex flex-col gap-2 min-w-[200px]">
@@ -651,9 +651,9 @@ const Chat = () => {
         </div>
 
         {/* Input Area */}
-        <div className="p-3 md:p-4 bg-slate-100 dark:bg-slate-900 border-t border-slate-200 dark:border-slate-700">
+        <div className="border-t border-slate-200 bg-slate-100 p-3 dark:border-slate-700 dark:bg-slate-900 md:p-4">
           {replyingTo && (
-            <div className="mb-2 flex items-center justify-between bg-white dark:bg-slate-800 p-2 rounded-lg border-l-4 border-indigo-500 shadow-sm">
+            <div className="mb-2 flex flex-wrap items-center justify-between gap-2 rounded-lg border-l-4 border-indigo-500 bg-white p-2 shadow-sm dark:bg-slate-800">
               <div className="text-sm">
                 <p className="font-bold text-indigo-500">Replying to {replyingTo.sender === user._id ? "yourself" : friend?.name}</p>
                 <p className="text-gray-500 dark:text-gray-400 truncate max-w-xs">{replyingTo.text || "📷 Image"}</p>
@@ -672,7 +672,7 @@ const Chat = () => {
               </button>
             </div>
           )}
-          <div className="flex gap-3 items-end">
+          <div className="flex items-end gap-2 sm:gap-3">
             <label className="cursor-pointer flex items-center justify-center text-gray-500 hover:text-indigo-500 transition-colors p-2 mb-1">
               <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">
                 <path strokeLinecap="round" strokeLinejoin="round" d="m2.25 15.75 5.159-5.159a2.25 2.25 0 0 1 3.182 0l5.159 5.159m-1.5-1.5 1.409-1.409a2.25 2.25 0 0 1 3.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 0 0 1.5-1.5V6a1.5 1.5 0 0 0-1.5-1.5H3.75A1.5 1.5 0 0 0 2.25 6v12a1.5 1.5 0 0 0 1.5 1.5Zm10.5-11.25h.008v.008h-.008V8.25Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Z" />

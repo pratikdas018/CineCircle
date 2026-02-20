@@ -111,15 +111,15 @@ const VerifyOTP = () => {
   };
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen bg-gray-900 text-white">
-      <div className="p-8 bg-gray-800 shadow-xl rounded-2xl w-full max-w-md border border-gray-700">
+    <div className="min-h-screen w-full overflow-x-hidden bg-gray-900 px-3 py-6 text-white sm:px-5 md:px-8 lg:px-12 flex flex-col items-center justify-center">
+      <div className="w-full max-w-md rounded-2xl border border-gray-700 bg-gray-800 p-5 shadow-xl sm:p-8">
         <h2 className="text-3xl font-extrabold mb-2 text-center text-blue-400">Verify Your Account</h2>
-        <p className="text-gray-400 mb-8 text-center">
+        <p className="mb-8 break-words text-center text-gray-400">
           We've sent a 6-digit code to <span className="text-white font-medium">{email}</span>
         </p>
         
         <form onSubmit={handleVerify} className="space-y-6">
-          <div className="flex justify-center gap-2" onPaste={handlePaste}>
+          <div className="flex justify-center gap-1.5 sm:gap-2" onPaste={handlePaste}>
             {otp.map((digit, index) => (
               <input
                 key={index}
@@ -129,7 +129,7 @@ const VerifyOTP = () => {
                 value={digit}
                 onChange={(e) => handleChange(e.target.value, index)}
                 onKeyDown={(e) => handleKeyDown(e, index)}
-                className="w-12 h-14 bg-gray-700 border border-gray-600 rounded-lg text-center text-2xl font-bold focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/50 transition-all"
+                className="h-12 w-10 rounded-lg border border-gray-600 bg-gray-700 text-center text-xl font-bold transition-all focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 sm:h-14 sm:w-12 sm:text-2xl"
                 required
               />
             ))}

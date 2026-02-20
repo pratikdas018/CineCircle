@@ -1,4 +1,5 @@
 import { BrowserRouter, useLocation } from "react-router-dom";
+import { useEffect } from "react";
 import { GoogleOAuthProvider } from "@react-oauth/google";
 import { AuthProvider, AuthContext } from "./context/AuthContext";
 import { SocketProvider } from "./context/SocketContext";
@@ -13,11 +14,15 @@ import { AnimatePresence } from "framer-motion";
 const AnimatedApp = () => {
   const location = useLocation();
 
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+  }, [location.pathname]);
+
   return (
-    <div className="flex flex-col min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 transition-all duration-500 ease-in-out">
+    <div className="flex flex-col min-h-screen w-full overflow-x-hidden bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 transition-all duration-500 ease-in-out">
       <Toaster position="bottom-center" />
       <Navbar />
-      <main className="flex-grow">
+      <main className="flex-grow w-full overflow-x-hidden">
         <AnimatePresence mode="wait">
           <AppRoutes key={location.pathname} />
         </AnimatePresence>

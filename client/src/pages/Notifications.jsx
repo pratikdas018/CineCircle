@@ -74,13 +74,13 @@ const Notifications = () => {
   };
 
   return (
-    <div className="min-h-screen bg-transparent text-slate-900 dark:text-slate-100 p-4 md:p-8 transition-all duration-500 ease-in-out">
+    <div className="min-h-screen w-full overflow-x-hidden bg-transparent px-3 py-4 text-slate-900 transition-all duration-500 ease-in-out dark:text-slate-100 sm:px-5 md:px-8 md:py-8 lg:px-12">
       <div className="max-w-3xl mx-auto">
-        <header className="mb-10 flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-6">
+        <header className="mb-10 flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 pb-6 dark:border-slate-800">
           <h1 className="text-3xl md:text-4xl font-extrabold flex items-center gap-3">
             <span className="text-rose-600">🔔</span> Notifications
           </h1>
-          <div className="flex items-center gap-4">
+          <div className="flex flex-wrap items-center gap-3">
             {notifications.some(n => !n.read) && (
               <button 
                 onClick={markAllAsRead}
@@ -142,7 +142,7 @@ const Notifications = () => {
                   </div>
                   
                   <div className="flex-1 min-w-0">
-                    <p className="text-slate-600 dark:text-slate-300 leading-relaxed">
+                    <p className="break-words whitespace-normal leading-relaxed text-slate-600 dark:text-slate-300">
                       <span className="font-bold text-slate-900 dark:text-white">
                         {n.sender?.name || "A user"}
                       </span>{" "}

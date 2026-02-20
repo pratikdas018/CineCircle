@@ -27,7 +27,7 @@ const Recommendations = () => {
 
   return (
     <div className="mt-8">
-      <div className="flex justify-between items-center mb-4">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-xl font-bold">🤖 {movies.length > 0 ? "Recommended For You" : "Trending Now"}</h2>
         <button 
           onClick={fetchRecommendations}
@@ -44,7 +44,7 @@ const Recommendations = () => {
           <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-red-500"></div>
         </div>
       ) : (
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-4 animate-fade-in">
+        <div className="grid grid-cols-1 gap-4 animate-fade-in sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
           {movies.map(m => (
             <Link key={m.imdbID} to={`/movie/${m.imdbID}`} className="hover:scale-105 transition-transform">
               <img

@@ -48,7 +48,7 @@ const Profile = () => {
   };
 
   return (
-    <div className="min-h-screen bg-transparent text-slate-900 dark:text-slate-100 p-4 md:p-8 transition-all duration-500 ease-in-out">
+    <div className="min-h-screen w-full overflow-x-hidden bg-transparent px-3 py-4 text-slate-900 transition-all duration-500 ease-in-out dark:text-slate-100 sm:px-5 md:px-8 md:py-8 lg:px-12">
       <div className="max-w-3xl mx-auto">
         <h1 className="text-3xl md:text-4xl font-extrabold mb-10 border-b border-gray-200 dark:border-gray-700 pb-4 flex items-center">
           <span className="mr-3">👤</span> {isOwnProfile ? "My Profile" : "User Profile"}
@@ -64,7 +64,7 @@ const Profile = () => {
             <div className="h-32 bg-gradient-to-r from-purple-600 to-blue-600"></div>
             
             <div className="px-4 md:px-8 pb-8">
-              <div className="relative flex justify-between items-end -mt-12 mb-6">
+              <div className="relative -mt-12 mb-6 flex flex-wrap items-end justify-between gap-3">
                 {/* Avatar */}
                 <div className="w-24 h-24 rounded-full bg-white dark:bg-gray-900 p-1">
                   <div className="w-full h-full rounded-full bg-gradient-to-br from-gray-700 to-gray-600 flex items-center justify-center text-3xl font-bold text-white shadow-inner overflow-hidden">
@@ -80,7 +80,7 @@ const Profile = () => {
                     )}
                   </div>
                 </div>
-                <div className="flex flex-col items-end">
+                <div className="flex min-w-0 flex-col items-end">
                   {isOwnProfile && !isEditing ? (
                     <button
                       onClick={() => setIsEditing(true)}

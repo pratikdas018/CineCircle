@@ -219,8 +219,8 @@ const Clubs = () => {
 
   return (
     <PageTransition>
-      <div className="min-h-screen bg-transparent text-slate-900 dark:text-slate-100 p-4 md:p-8 transition-colors duration-500">
-        <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="min-h-screen w-full overflow-x-hidden bg-transparent px-3 py-4 text-slate-900 transition-colors duration-500 dark:text-slate-100 sm:px-5 md:px-8 md:py-8 lg:px-12">
+        <div className="mx-auto grid max-w-7xl grid-cols-1 gap-6 lg:grid-cols-3">
           <aside className="space-y-4">
             <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4">
               <h2 className="text-xl font-bold mb-3">Create Movie Club</h2>
@@ -313,7 +313,7 @@ const Clubs = () => {
                     {selectedClub.members.map((member) => (
                       <div
                         key={member._id}
-                        className="flex items-center justify-between rounded-lg border border-slate-200 dark:border-slate-800 px-3 py-2"
+                        className="flex flex-col gap-2 rounded-lg border border-slate-200 px-3 py-2 dark:border-slate-800 sm:flex-row sm:items-center sm:justify-between"
                       >
                         <p>
                           {member.name}
@@ -333,7 +333,7 @@ const Clubs = () => {
                   </div>
 
                   {isOwner && availableFriendsToAdd.length > 0 && (
-                    <div className="mt-3 flex gap-2">
+                    <div className="mt-3 flex flex-col gap-2 sm:flex-row">
                       <select
                         value={addMemberId}
                         onChange={(e) => setAddMemberId(e.target.value)}
@@ -359,7 +359,7 @@ const Clubs = () => {
                 <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4">
                   <h2 className="text-xl font-bold mb-3">Group Watchlist + Voting</h2>
 
-                  <div className="flex gap-2 mb-3">
+                  <div className="mb-3 flex flex-col gap-2 sm:flex-row">
                     <input
                       value={movieQuery}
                       onChange={(e) => setMovieQuery(e.target.value)}
@@ -378,11 +378,11 @@ const Clubs = () => {
                   {isSearchingMovies && <p className="text-sm text-slate-500">Searching movies...</p>}
 
                   {movieResults.length > 0 && (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-4">
+                    <div className="mb-4 grid grid-cols-1 gap-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
                       {movieResults.slice(0, 6).map((movie) => (
                         <div
                           key={movie.imdbID}
-                          className="flex items-center justify-between rounded-lg border border-slate-200 dark:border-slate-800 px-3 py-2"
+                          className="flex flex-col gap-2 rounded-lg border border-slate-200 px-3 py-2 dark:border-slate-800 sm:flex-row sm:items-center sm:justify-between"
                         >
                           <p className="text-sm">
                             {movie.Title} <span className="text-slate-500">({movie.Year})</span>
@@ -402,17 +402,17 @@ const Clubs = () => {
                     {sortedWatchlist.map((movie) => (
                       <div
                         key={movie.movieId}
-                        className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 dark:border-slate-800 px-3 py-2"
+                        className="flex flex-col gap-3 rounded-lg border border-slate-200 px-3 py-2 dark:border-slate-800 sm:flex-row sm:items-center sm:justify-between"
                       >
                         <div className="min-w-0">
-                          <Link to={`/movie/${movie.movieId}`} className="font-semibold hover:underline truncate block">
+                          <Link to={`/movie/${movie.movieId}`} className="block break-words font-semibold hover:underline">
                             {movie.title}
                           </Link>
                           <p className="text-xs text-slate-500">
                             {movie.releaseDate || "N/A"} • {movie.votes.length} votes
                           </p>
                         </div>
-                        <div className="flex items-center gap-2">
+                        <div className="flex flex-wrap items-center gap-2">
                           <button
                             onClick={() => toggleVote(movie.movieId)}
                             className={`text-xs px-2 py-1 rounded ${
@@ -438,16 +438,16 @@ const Clubs = () => {
                   </div>
 
                   {isOwner && sortedWatchlist.length > 0 && (
-                    <div className="mt-4 pt-4 border-t border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row gap-2">
+                    <div className="mt-4 flex flex-col gap-2 border-t border-slate-200 pt-4 dark:border-slate-800 sm:flex-row">
                       <input
                         type="datetime-local"
                         value={scheduledFor}
                         onChange={(e) => setScheduledFor(e.target.value)}
-                        className="px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
+                        className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 dark:border-slate-700 dark:bg-slate-800 sm:w-auto"
                       />
                       <button
                         onClick={finalizeNextMovieNight}
-                        className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg font-semibold"
+                        className="w-full rounded-lg bg-emerald-600 px-4 py-2 font-semibold text-white hover:bg-emerald-700 sm:w-auto"
                       >
                         Pick Top Voted Movie Night
                       </button>

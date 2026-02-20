@@ -14,73 +14,113 @@ const Footer = () => {
   };
 
   return (
-    <footer className="bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800 pt-12 pb-8 px-8 mt-auto transition-colors duration-300">
-      <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-4 gap-12 mb-12">
-        {/* Brand Section */}
-        <div className="col-span-1 md:col-span-2">
-          <Link to="/" className="text-3xl font-black text-red-500 tracking-tighter hover:text-red-400 transition-colors mb-4 inline-block">
+    <footer className="mt-auto border-t border-gray-200 bg-white px-3 pb-8 pt-10 transition-colors duration-300 dark:border-gray-800 dark:bg-gray-900 sm:px-5 md:px-8 lg:px-12">
+      <div className="mx-auto mb-10 grid w-full max-w-7xl grid-cols-1 gap-8 md:grid-cols-4 md:gap-10">
+        <div className="md:col-span-2">
+          <Link
+            to="/"
+            className="mb-3 inline-block text-2xl font-black tracking-tighter text-red-500 transition-colors hover:text-red-400 sm:text-3xl"
+          >
             CineCircle
           </Link>
-          <p className="text-gray-400 max-w-sm leading-relaxed">
-            Your ultimate destination for discovering, tracking, and sharing your cinematic journey with friends. Join the circle and never miss a masterpiece.
+          <p className="max-w-md break-words leading-relaxed text-gray-400">
+            Your ultimate destination for discovering, tracking, and sharing your cinematic journey with friends. Join
+            the circle and never miss a masterpiece.
           </p>
         </div>
 
-        {/* Quick Links */}
         <div>
-          <h4 className="text-gray-900 dark:text-white font-bold mb-6 uppercase tracking-wider text-sm">Navigation</h4>
-          <ul className="space-y-4">
-            <li><Link to="/" className="text-gray-500 dark:text-gray-400 hover:text-red-500 transition-colors">Home</Link></li>
-            <li><Link to="/watchlist" className="text-gray-500 dark:text-gray-400 hover:text-red-500 transition-colors">Watchlist</Link></li>
-            <li><Link to="/friends" className="text-gray-500 dark:text-gray-400 hover:text-red-500 transition-colors">Friends</Link></li>
-            <li><Link to="/notifications" className="text-gray-500 dark:text-gray-400 hover:text-red-500 transition-colors">Notifications</Link></li>
+          <h4 className="mb-4 text-sm font-bold uppercase tracking-wider text-gray-900 dark:text-white">Navigation</h4>
+          <ul className="space-y-3">
+            <li>
+              <Link to="/" className="text-gray-500 transition-colors hover:text-red-500 dark:text-gray-400">
+                Home
+              </Link>
+            </li>
+            <li>
+              <Link to="/watchlist" className="text-gray-500 transition-colors hover:text-red-500 dark:text-gray-400">
+                Watchlist
+              </Link>
+            </li>
+            <li>
+              <Link to="/friends" className="text-gray-500 transition-colors hover:text-red-500 dark:text-gray-400">
+                Friends
+              </Link>
+            </li>
+            <li>
+              <Link
+                to="/notifications"
+                className="text-gray-500 transition-colors hover:text-red-500 dark:text-gray-400"
+              >
+                Notifications
+              </Link>
+            </li>
           </ul>
         </div>
 
-        {/* Social/Contact */}
         <div>
-          <h4 className="text-gray-900 dark:text-white font-bold mb-6 uppercase tracking-wider text-sm">Connect</h4>
-          <div className="flex gap-4 mb-6">
-            <a href="https://pratik-web.vercel.app/" className="w-10 h-10 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center transition-all text-gray-500 dark:text-gray-400 hover:text-red-500" title="Portfolio">
-              <FaGlobe size={20} />
+          <h4 className="mb-4 text-sm font-bold uppercase tracking-wider text-gray-900 dark:text-white">Connect</h4>
+          <div className="mb-5 flex flex-wrap gap-3">
+            <a
+              href="https://pratik-web.vercel.app/"
+              className="flex h-10 w-10 items-center justify-center rounded-full bg-gray-100 text-gray-500 transition-all hover:text-red-500 dark:bg-gray-800 dark:text-gray-400"
+              title="Portfolio"
+            >
+              <FaGlobe size={18} />
             </a>
-            <a href="https://github.com/pratikdas018" target="_blank" rel="noopener noreferrer" className="w-10 h-10 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center transition-all text-gray-500 dark:text-gray-400 hover:text-red-500" title="GitHub">
-              <FaGithub size={20} />
+            <a
+              href="https://github.com/pratikdas018"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex h-10 w-10 items-center justify-center rounded-full bg-gray-100 text-gray-500 transition-all hover:text-red-500 dark:bg-gray-800 dark:text-gray-400"
+              title="GitHub"
+            >
+              <FaGithub size={18} />
             </a>
-            <a href="https://www.linkedin.com/in/pratik018/" target="_blank" rel="noopener noreferrer" className="w-10 h-10 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center transition-all text-gray-500 dark:text-gray-400 hover:text-red-500" title="LinkedIn">
-              <FaLinkedin size={20} />
+            <a
+              href="https://www.linkedin.com/in/pratik018/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex h-10 w-10 items-center justify-center rounded-full bg-gray-100 text-gray-500 transition-all hover:text-red-500 dark:bg-gray-800 dark:text-gray-400"
+              title="LinkedIn"
+            >
+              <FaLinkedin size={18} />
             </a>
           </div>
-          <p className="text-gray-500 text-xs">
-            Support: cinecircle.co2026@gmail.com
-          </p>
+          <p className="break-words text-xs text-gray-500">Support: cinecircle.co2026@gmail.com</p>
         </div>
       </div>
 
-      {/* Bottom Bar */}
-      <div className="max-w-7xl mx-auto pt-8 border-t border-gray-200 dark:border-gray-800 flex flex-col md:flex-row justify-between items-center gap-4">
-        <p className="text-gray-500 text-sm">
-          © {new Date().getFullYear()} CineCircle. All rights reserved.
+      <div className="mx-auto flex w-full max-w-7xl flex-col gap-4 border-t border-gray-200 pt-6 dark:border-gray-800 md:flex-row md:items-center md:justify-between">
+        <p className="text-center text-sm text-gray-500 md:text-left">
+          Copyright {new Date().getFullYear()} CineCircle. All rights reserved.
         </p>
-        <div className="flex items-center gap-8">
-          <div className="flex gap-6 text-sm text-gray-500">
-            <button onClick={() => setActivePolicy('privacy')} className="hover:text-red-500 dark:hover:text-red-400 transition-colors cursor-pointer">Privacy Policy</button>
-            <button onClick={() => setActivePolicy('terms')} className="hover:text-red-500 dark:hover:text-red-400 transition-colors cursor-pointer">Terms of Service</button>
+        <div className="flex flex-wrap items-center justify-center gap-4 md:justify-end">
+          <div className="flex flex-wrap items-center justify-center gap-4 text-sm text-gray-500">
+            <button
+              onClick={() => setActivePolicy("privacy")}
+              className="cursor-pointer transition-colors hover:text-red-500 dark:hover:text-red-400"
+            >
+              Privacy Policy
+            </button>
+            <button
+              onClick={() => setActivePolicy("terms")}
+              className="cursor-pointer transition-colors hover:text-red-500 dark:hover:text-red-400"
+            >
+              Terms of Service
+            </button>
           </div>
-          <button 
+          <button
             onClick={scrollToTop}
-            className="w-10 h-10 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center transition-all text-gray-500 dark:text-gray-400 hover:text-red-500 shadow-lg group border border-gray-200 dark:border-transparent"
+            className="group flex h-10 w-10 items-center justify-center rounded-full border border-gray-200 bg-gray-100 text-gray-500 shadow-lg transition-all hover:text-red-500 dark:border-transparent dark:bg-gray-800 dark:text-gray-400"
             title="Back to Top"
           >
-            <FaArrowUp size={18} className="group-hover:-translate-y-1 transition-transform" />
+            <FaArrowUp size={16} className="transition-transform group-hover:-translate-y-1" />
           </button>
         </div>
       </div>
 
-      <PolicyModal 
-        activePolicy={activePolicy} 
-        onClose={() => setActivePolicy(null)} 
-      />
+      <PolicyModal activePolicy={activePolicy} onClose={() => setActivePolicy(null)} />
     </footer>
   );
 };

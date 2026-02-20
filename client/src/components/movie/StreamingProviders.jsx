@@ -65,7 +65,7 @@ const StreamingProviders = ({ movieId, movieTitle }) => {
   return (
     <div className="mt-6 bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800">
       <h2 className="text-xl font-bold mb-3">Where to Watch ({region})</h2>
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
         {groupedProviders.map((provider) => (
           <div
             key={provider.provider_id}
@@ -80,9 +80,9 @@ const StreamingProviders = ({ movieId, movieTitle }) => {
               <img
                 src={`https://image.tmdb.org/t/p/w200${provider.logo_path}`}
                 alt={provider.provider_name}
-                className="w-14 h-14 rounded-lg shadow-md"
+                className="h-auto w-full max-w-[56px] rounded-lg object-cover shadow-md"
               />
-              <span className="text-xs mt-2 text-center font-semibold">{provider.provider_name}</span>
+              <span className="mt-2 break-words text-center text-xs font-semibold">{provider.provider_name}</span>
             </a>
 
             <button

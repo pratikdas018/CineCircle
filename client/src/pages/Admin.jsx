@@ -212,7 +212,7 @@ const Admin = () => {
 
   return (
     <PageTransition>
-      <div className="min-h-screen bg-transparent text-slate-900 dark:text-slate-100 p-4 md:p-8 transition-colors duration-500">
+      <div className="min-h-screen w-full overflow-x-hidden bg-transparent px-3 py-4 text-slate-900 transition-colors duration-500 dark:text-slate-100 sm:px-5 md:px-8 md:py-8 lg:px-12">
         <div className="max-w-7xl mx-auto space-y-6">
           <header className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
             <div>
@@ -234,7 +234,7 @@ const Admin = () => {
             </button>
           </header>
 
-          <div className="flex gap-2 border-b border-slate-200 dark:border-slate-800">
+          <div className="flex gap-2 overflow-x-auto border-b border-slate-200 dark:border-slate-800">
             {["overview", "users", "reviews", "emails"].map((tab) => (
               <button
                 key={tab}
@@ -257,7 +257,7 @@ const Admin = () => {
                   <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-indigo-500" />
                 </div>
               ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
                   {statCards.map((card) => (
                     <div
                       key={card.label}
@@ -296,8 +296,8 @@ const Admin = () => {
                   <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-indigo-500" />
                 </div>
               ) : (
-                <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl overflow-x-auto">
-                  <table className="w-full text-left text-sm">
+                <div className="w-full overflow-x-auto rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
+                  <table className="min-w-[720px] w-full text-left text-sm">
                     <thead className="bg-slate-100 dark:bg-slate-800">
                       <tr>
                         <th className="px-4 py-3">Name</th>
@@ -326,7 +326,8 @@ const Admin = () => {
                           </td>
                           <td className="px-4 py-3">{u.isVerified ? "Yes" : "No"}</td>
                           <td className="px-4 py-3">{new Date(u.createdAt).toLocaleDateString()}</td>
-                          <td className="px-4 py-3 flex gap-2">
+                          <td className="px-4 py-3">
+                            <div className="flex flex-wrap gap-2">
                             <button
                               onClick={() => updateRole(u, u.role === "admin" ? "user" : "admin")}
                               className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs px-3 py-1.5 rounded"
@@ -339,6 +340,7 @@ const Admin = () => {
                             >
                               Delete
                             </button>
+                            </div>
                           </td>
                         </tr>
                       ))}
@@ -354,7 +356,7 @@ const Admin = () => {
                 </div>
               )}
 
-              <div className="flex justify-between items-center">
+              <div className="flex flex-wrap items-center justify-between gap-2">
                 <p className="text-sm text-slate-500">Total: {usersData.total}</p>
                 <div className="flex gap-2">
                   <button
@@ -435,7 +437,7 @@ const Admin = () => {
                 </div>
               )}
 
-              <div className="flex justify-between items-center">
+              <div className="flex flex-wrap items-center justify-between gap-2">
                 <p className="text-sm text-slate-500">Total: {reviewsData.total}</p>
                 <div className="flex gap-2">
                   <button
@@ -462,7 +464,7 @@ const Admin = () => {
 
           {activeTab === "emails" && (
             <section className="space-y-6">
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
                 <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4 space-y-4">
                   <h3 className="text-lg font-bold">Email Broadcast Panel</h3>
 
@@ -523,14 +525,14 @@ const Admin = () => {
 
                 <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4 space-y-4">
                   <h3 className="text-lg font-bold">Preview</h3>
-                  <div className="border border-slate-200 dark:border-slate-700 rounded-lg p-4 min-h-64 bg-slate-50 dark:bg-slate-950">
+                  <div className="min-h-64 overflow-auto rounded-lg border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-950">
                     <p className="text-xs uppercase tracking-wide text-slate-500">Subject</p>
                     <p className="text-lg font-semibold mt-1 break-words">
                       {emailSubject || "No subject generated yet"}
                     </p>
                     <hr className="my-4 border-slate-200 dark:border-slate-700" />
                     <p className="text-xs uppercase tracking-wide text-slate-500">Body</p>
-                    <p className="whitespace-pre-wrap text-sm mt-2 text-slate-700 dark:text-slate-200">
+                    <p className="mt-2 break-words whitespace-pre-wrap text-sm text-slate-700 dark:text-slate-200">
                       {emailBody || "No content generated yet"}
                     </p>
                   </div>
@@ -560,7 +562,7 @@ const Admin = () => {
                         className="border border-slate-200 dark:border-slate-700 rounded-lg p-3"
                       >
                         <p className="font-semibold break-words">{log.subject}</p>
-                        <p className="text-sm text-slate-600 dark:text-slate-300 mt-1 line-clamp-3">
+                        <p className="mt-1 line-clamp-3 break-words whitespace-normal text-sm text-slate-600 dark:text-slate-300">
                           {log.body}
                         </p>
                         <p className="text-xs text-slate-500 mt-2">
