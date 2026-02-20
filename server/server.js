@@ -231,6 +231,16 @@ io.on("connection", (socket) => {
 
 const PORT = process.env.PORT || 5000;
 
+server.on("error", (error) => {
+  if (error?.code === "EADDRINUSE") {
+    console.error(
+      `Port ${PORT} is already in use. Another backend instance is already running. Stop the old process or use a different PORT.`
+    );
+    process.exit(0);
+  }
+  throw error;
+});
+
 server.listen(PORT, "0.0.0.0", () => {
   console.log(`Server running with Socket.io on port ${PORT}`);
 });

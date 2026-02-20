@@ -45,7 +45,8 @@ const getSmtpUser = (service) => {
     return process.env.EMAIL_FROM || process.env.EMAIL_USER || "";
   }
 
-  return process.env.EMAIL_USER || process.env.EMAIL_FROM || "";
+  // Prefer EMAIL_FROM for consistency with app-level sender config.
+  return process.env.EMAIL_FROM || process.env.EMAIL_USER || "";
 };
 
 const getSmtpHost = (service) => {
@@ -238,6 +239,21 @@ const sendHtmlEmail = async ({ to, subject, html, text }) => {
     throw error;
   }
 };
+
+const escapeHtml = (value = "") =>
+  String(value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+
+const plainTextToHtml = (text = "") =>
+  `
+    <div style="font-family:Arial,sans-serif;max-width:700px;margin:0 auto;padding:20px;border:1px solid #e5e7eb;border-radius:10px;background:#ffffff;color:#111827;">
+      ${escapeHtml(text).replace(/\n/g, "<br>")}
+    </div>
+  `;
 
 export const verifyEmailTransport = async () => {
   try {
@@ -434,4 +450,20 @@ export const sendAvailabilityEmail = async (to, movieTitle, providerName, link =
   } catch (error) {
     console.error("Availability email sending failed:", error.message);
   }
+};
+
+export const sendCustomEmail = async (to, subject, body) => {
+  const safeSubject = String(subject || "").trim();
+  const safeBody = String(body || "").trim();
+
+  if (!safeSubject || !safeBody) {
+    throw new Error("Subject and body are required");
+  }
+
+  await sendHtmlEmail({
+    to,
+    subject: safeSubject,
+    text: safeBody,
+    html: plainTextToHtml(safeBody),
+  });
 };

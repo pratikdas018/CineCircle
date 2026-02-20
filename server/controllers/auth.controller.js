@@ -3,7 +3,7 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import axios from "axios";
 import crypto from "crypto";
-import { sendEmail, sendPasswordResetEmail } from "../utils/sendEmail.js";
+import { sendCustomEmail, sendEmail, sendPasswordResetEmail } from "../utils/sendEmail.js";
 import { enqueueEmailTask } from "../utils/emailQueue.js";
 
 const OTP_TTL_MS = 10 * 60 * 1000;
@@ -175,6 +175,43 @@ const queuePasswordResetEmail = async (email, resetLink) => {
   });
 };
 
+const parseAdminEmails = () =>
+  String(process.env.ADMIN_EMAILS || "")
+    .split(",")
+    .map((item) => item.trim().toLowerCase())
+    .filter(Boolean);
+
+const notifyAdminsOnNewUser = async (user) => {
+  const adminEmails = parseAdminEmails();
+  if (!adminEmails.length || !user) return;
+
+  const registeredAt = user.createdAt ? new Date(user.createdAt) : new Date();
+  const timestamp = `${registeredAt.toLocaleString()} (${registeredAt.toISOString()})`;
+
+  const subject = `New CineCircle User Registered: ${user.name}`;
+  const body = [
+    "Hello Admin,",
+    "",
+    "A new user has registered on CineCircle.",
+    "",
+    `Name: ${user.name}`,
+    `Email: ${user.email}`,
+    `User ID: ${user._id}`,
+    `Registration Date & Time: ${timestamp}`,
+    "",
+    "This is an automated notification.",
+  ].join("\n");
+
+  await Promise.allSettled(
+    adminEmails.map((adminEmail) =>
+      enqueueEmailTask(() => sendCustomEmail(adminEmail, subject, body), {
+        retries: 2,
+        retryDelayMs: 800,
+      })
+    )
+  );
+};
+
 export const registerUser = async (req, res) => {
   try {
     const { name, email, password } = req.body;
@@ -240,6 +277,10 @@ export const registerUser = async (req, res) => {
     const otp = generateOtp();
     setOtpState(user, otp);
     await user.save();
+
+    notifyAdminsOnNewUser(user).catch((error) => {
+      console.error("Failed to notify admin about new user:", error.message);
+    });
 
     try {
       await queueOtpEmail(user.email, "CineCircle OTP Verification Code", otp);
@@ -451,6 +492,10 @@ export const googleLogin = async (req, res) => {
         googleId,
         role: getInitialRole(normalizedEmail),
         isVerified: true,
+      });
+
+      notifyAdminsOnNewUser(user).catch((error) => {
+        console.error("Failed to notify admin about new user:", error.message);
       });
     } else if (!user.googleId) {
       user.googleId = googleId;

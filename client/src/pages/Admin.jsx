@@ -17,6 +17,18 @@ const defaultStats = {
   newReviewsLast7Days: 0,
 };
 
+const EMAIL_TYPES = [
+  { value: "feature_update", label: "Feature Update" },
+  { value: "maintenance_notice", label: "Maintenance Notice" },
+  { value: "offer_announcement", label: "Offer Announcement" },
+  { value: "general_update", label: "General Update" },
+];
+
+const DEFAULT_EMAIL_DRAFT = {
+  subject: "CineCircle Update",
+  body: "Hello CineCircle users,\n\nWe are sharing an update from our team. Please stay tuned for more improvements.\n\nBest regards,\nCineCircle Team",
+};
+
 const Admin = () => {
   const { user } = useContext(AuthContext);
   const navigate = useNavigate();
@@ -30,6 +42,13 @@ const Admin = () => {
   const [reviewsData, setReviewsData] = useState({ reviews: [], page: 1, pages: 1, total: 0 });
   const [userSearch, setUserSearch] = useState("");
   const [reviewSearch, setReviewSearch] = useState("");
+  const [emailType, setEmailType] = useState("feature_update");
+  const [emailSubject, setEmailSubject] = useState("");
+  const [emailBody, setEmailBody] = useState("");
+  const [generatingEmail, setGeneratingEmail] = useState(false);
+  const [sendingEmail, setSendingEmail] = useState(false);
+  const [loadingEmailLogs, setLoadingEmailLogs] = useState(true);
+  const [emailLogsData, setEmailLogsData] = useState({ logs: [], page: 1, pages: 1, total: 0 });
 
   useEffect(() => {
     if (!user) {
@@ -77,13 +96,26 @@ const Admin = () => {
     }
   }, []);
 
+  const fetchEmailLogs = useCallback(async (page = 1) => {
+    try {
+      setLoadingEmailLogs(true);
+      const { data } = await api.get(`/api/admin/emails/logs?page=${page}&limit=10`);
+      setEmailLogsData(data);
+    } catch {
+      toast.error("Failed to load email logs");
+    } finally {
+      setLoadingEmailLogs(false);
+    }
+  }, []);
+
   useEffect(() => {
     if (user?.role === "admin") {
       fetchStats();
       fetchUsers(1, "");
       fetchReviews(1, "");
+      fetchEmailLogs(1);
     }
-  }, [user, fetchStats, fetchUsers, fetchReviews]);
+  }, [user, fetchStats, fetchUsers, fetchReviews, fetchEmailLogs]);
 
   const updateRole = async (targetUser, role) => {
     try {
@@ -121,6 +153,47 @@ const Admin = () => {
     }
   };
 
+  const generateAiEmail = async () => {
+    try {
+      setGeneratingEmail(true);
+      const { data } = await api.post("/api/admin/generate-email", { emailType });
+      const subject = String(data?.subject || "").trim();
+      const body = String(data?.body || "").trim();
+      setEmailSubject(subject || DEFAULT_EMAIL_DRAFT.subject);
+      setEmailBody(body || DEFAULT_EMAIL_DRAFT.body);
+      toast.success("AI email generated");
+    } catch (error) {
+      setEmailSubject(DEFAULT_EMAIL_DRAFT.subject);
+      setEmailBody(DEFAULT_EMAIL_DRAFT.body);
+      toast.error(error.response?.data?.message || "Failed to generate AI email");
+    } finally {
+      setGeneratingEmail(false);
+    }
+  };
+
+  const sendEmailToAllUsers = async () => {
+    if (!emailSubject.trim() || !emailBody.trim()) {
+      toast.error("Subject and body are required");
+      return;
+    }
+
+    if (!window.confirm("Send this email to all registered users?")) return;
+
+    try {
+      setSendingEmail(true);
+      const { data } = await api.post("/api/admin/send-broadcast", {
+        subject: emailSubject,
+        body: emailBody,
+      });
+      toast.success(`Broadcast completed: ${data.sent}/${data.attempted} sent`);
+      fetchEmailLogs(1);
+    } catch (error) {
+      toast.error(error.response?.data?.message || "Failed to send broadcast");
+    } finally {
+      setSendingEmail(false);
+    }
+  };
+
   if (!user || user.role !== "admin") {
     return null;
   }
@@ -153,6 +226,7 @@ const Admin = () => {
                 fetchStats();
                 fetchUsers(usersData.page, userSearch);
                 fetchReviews(reviewsData.page, reviewSearch);
+                fetchEmailLogs(emailLogsData.page);
               }}
               className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg font-semibold"
             >
@@ -161,7 +235,7 @@ const Admin = () => {
           </header>
 
           <div className="flex gap-2 border-b border-slate-200 dark:border-slate-800">
-            {["overview", "users", "reviews"].map((tab) => (
+            {["overview", "users", "reviews", "emails"].map((tab) => (
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
@@ -382,6 +456,125 @@ const Admin = () => {
                     Next
                   </button>
                 </div>
+              </div>
+            </section>
+          )}
+
+          {activeTab === "emails" && (
+            <section className="space-y-6">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4 space-y-4">
+                  <h3 className="text-lg font-bold">Email Broadcast Panel</h3>
+
+                  <label className="block space-y-2">
+                    <span className="text-sm font-medium text-slate-600 dark:text-slate-300">Email Type</span>
+                    <select
+                      value={emailType}
+                      onChange={(e) => setEmailType(e.target.value)}
+                      className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-2 focus:outline-none focus:border-indigo-500"
+                    >
+                      {EMAIL_TYPES.map((item) => (
+                        <option key={item.value} value={item.value}>
+                          {item.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <div className="flex gap-3">
+                    <button
+                      onClick={generateAiEmail}
+                      disabled={generatingEmail}
+                      className="bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white px-4 py-2 rounded-lg font-semibold"
+                    >
+                      {generatingEmail ? "Generating..." : "Generate AI Email"}
+                    </button>
+                  </div>
+
+                  <label className="block space-y-2">
+                    <span className="text-sm font-medium text-slate-600 dark:text-slate-300">Subject</span>
+                    <input
+                      value={emailSubject}
+                      onChange={(e) => setEmailSubject(e.target.value)}
+                      placeholder="Enter subject"
+                      className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-2 focus:outline-none focus:border-indigo-500"
+                    />
+                  </label>
+
+                  <label className="block space-y-2">
+                    <span className="text-sm font-medium text-slate-600 dark:text-slate-300">Body</span>
+                    <textarea
+                      value={emailBody}
+                      onChange={(e) => setEmailBody(e.target.value)}
+                      placeholder="Enter email content"
+                      rows={12}
+                      className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-2 focus:outline-none focus:border-indigo-500 resize-y"
+                    />
+                  </label>
+
+                  <button
+                    onClick={sendEmailToAllUsers}
+                    disabled={sendingEmail}
+                    className="bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 text-white px-4 py-2 rounded-lg font-semibold"
+                  >
+                    {sendingEmail ? "Sending..." : "Send to All Users"}
+                  </button>
+                </div>
+
+                <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4 space-y-4">
+                  <h3 className="text-lg font-bold">Preview</h3>
+                  <div className="border border-slate-200 dark:border-slate-700 rounded-lg p-4 min-h-64 bg-slate-50 dark:bg-slate-950">
+                    <p className="text-xs uppercase tracking-wide text-slate-500">Subject</p>
+                    <p className="text-lg font-semibold mt-1 break-words">
+                      {emailSubject || "No subject generated yet"}
+                    </p>
+                    <hr className="my-4 border-slate-200 dark:border-slate-700" />
+                    <p className="text-xs uppercase tracking-wide text-slate-500">Body</p>
+                    <p className="whitespace-pre-wrap text-sm mt-2 text-slate-700 dark:text-slate-200">
+                      {emailBody || "No content generated yet"}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4">
+                <div className="flex items-center justify-between gap-4 mb-4">
+                  <h3 className="text-lg font-bold">Email Logs</h3>
+                  <button
+                    onClick={() => fetchEmailLogs(emailLogsData.page)}
+                    className="px-3 py-1.5 rounded border border-slate-300 dark:border-slate-700 text-sm"
+                  >
+                    Refresh Logs
+                  </button>
+                </div>
+
+                {loadingEmailLogs ? (
+                  <div className="py-10 flex justify-center">
+                    <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-indigo-500" />
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {emailLogsData.logs.map((log) => (
+                      <article
+                        key={log._id}
+                        className="border border-slate-200 dark:border-slate-700 rounded-lg p-3"
+                      >
+                        <p className="font-semibold break-words">{log.subject}</p>
+                        <p className="text-sm text-slate-600 dark:text-slate-300 mt-1 line-clamp-3">
+                          {log.body}
+                        </p>
+                        <p className="text-xs text-slate-500 mt-2">
+                          Sent: {log.totalUsersSent} users | By: {log.admin?.name || log.admin?.email || "Admin"} |
+                          {" "}
+                          {new Date(log.sentAt || log.createdAt).toLocaleString()}
+                        </p>
+                      </article>
+                    ))}
+                    {emailLogsData.logs.length === 0 && (
+                      <p className="text-sm text-slate-500 py-4">No email logs yet.</p>
+                    )}
+                  </div>
+                )}
               </div>
             </section>
           )}
