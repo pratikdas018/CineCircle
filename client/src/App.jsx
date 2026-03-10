@@ -22,7 +22,7 @@ const AnimatedApp = () => {
     <div className="flex flex-col min-h-screen w-full overflow-x-hidden bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 transition-all duration-500 ease-in-out">
       <Toaster position="bottom-center" />
       <Navbar />
-      <main className="flex-grow w-full overflow-x-hidden">
+      <main className="flex-grow w-full overflow-x-hidden pt-16">
         <AnimatePresence mode="wait">
           <AppRoutes key={location.pathname} />
         </AnimatePresence>
