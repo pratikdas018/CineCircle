@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState } from "react";
 
 // Inject keyframes for spinner animation into the document head.
 // This is a clean way to handle CSS animations in a component
@@ -9,20 +9,16 @@ const keyframes = `
     100% { transform: rotate(360deg); }
   }
 `;
-const styleSheet = document.createElement("style");
-styleSheet.type = "text/css";
-styleSheet.innerText = keyframes;
-document.head.appendChild(styleSheet);
+if (!document.getElementById("trailer-modal-spin-anim")) {
+  const styleSheet = document.createElement("style");
+  styleSheet.id = "trailer-modal-spin-anim";
+  styleSheet.type = "text/css";
+  styleSheet.innerText = keyframes;
+  document.head.appendChild(styleSheet);
+}
 
 const TrailerModal = ({ isOpen, onClose, trailerKey }) => {
   const [isLoading, setIsLoading] = useState(true);
-
-  // When the modal opens or the trailer changes, reset the loading state.
-  useEffect(() => {
-    if (isOpen) {
-      setIsLoading(true);
-    }
-  }, [isOpen, trailerKey]);
 
   if (!isOpen) return null;
 
@@ -40,6 +36,7 @@ const TrailerModal = ({ isOpen, onClose, trailerKey }) => {
               </div>
             )}
             <iframe
+              key={trailerKey || "trailer"}
               style={{ ...styles.iframe, visibility: isLoading ? 'hidden' : 'visible' }}
               src={`https://www.youtube.com/embed/${trailerKey}?autoplay=1`}
               title="Movie Trailer"

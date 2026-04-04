@@ -13,10 +13,8 @@ const MovieDetails = () => {
   const [trailerKey, setTrailerKey] = useState(null);
   const [isTrailerOpen, setIsTrailerOpen] = useState(false);
   const [isInWatchlist, setIsInWatchlist] = useState(false);
-  const [cast, setCast] = useState([]);
   const [ratingStats, setRatingStats] = useState({ avg: 0, count: 0, distribution: {} });
   const [selectedRating, setSelectedRating] = useState(null);
-  const [omdbData, setOmdbData] = useState(null);
 
   useEffect(() => {
     api.get("/api/watchlist")
@@ -26,12 +24,15 @@ const MovieDetails = () => {
       })
       .catch((err) => console.error("Failed to check watchlist", err));
 
-    // Fetch primary movie data from OMDb
-    const omdbKey = import.meta.env.VITE_OMDB_API_KEY;
-    fetch(`https://www.omdbapi.com/?i=${id}&plot=full&apikey=${omdbKey}`)
-      .then(res => res.json())
-      .then(data => setMovie(data))
-      .catch(err => console.error("OMDb fetch error:", err));
+    api.get(`/api/movies/${id}`)
+      .then((res) => {
+        setMovie(res.data);
+        setTrailerKey(res.data?.TrailerKey || null);
+      })
+      .catch((err) => {
+        console.error("Movie details fetch error:", err);
+        toast.error("Failed to load movie details.");
+      });
   }, [id]);
 
   const toggleWatchlist = async () => {
@@ -40,7 +41,7 @@ const MovieDetails = () => {
         await api.delete(`/api/watchlist/${movie.imdbID}`);
         setIsInWatchlist(false);
         toast.success("Removed from Watchlist!");
-      } catch (err) {
+      } catch {
         toast.error("Failed to remove from watchlist.");
       }
     } else {
@@ -52,7 +53,7 @@ const MovieDetails = () => {
         });
         setIsInWatchlist(true);
         toast.success("Added to Watchlist!");
-      } catch (err) {
+      } catch {
         toast.error("Failed to add to watchlist.");
       }
     }
@@ -181,7 +182,11 @@ const MovieDetails = () => {
 
             <p className="mb-6 break-words whitespace-normal text-base leading-relaxed text-slate-700 dark:text-slate-300 sm:text-lg">{movie.Plot}</p>
 
-            <StreamingProviders movieId={movie.imdbID || id} movieTitle={movie.Title} />
+            <StreamingProviders
+              movieId={movie.imdbID || id}
+              movieTitle={movie.Title}
+              moviePoster={movie.Poster}
+            />
             
             {movie.Actors && (
               <div className="mt-8">
@@ -207,11 +212,13 @@ const MovieDetails = () => {
           maxRating={maxRating}
         />
 
-        <TrailerModal
-          isOpen={isTrailerOpen}
-          onClose={() => setIsTrailerOpen(false)}
-          trailerKey={trailerKey}
-        />
+        {isTrailerOpen && (
+          <TrailerModal
+            isOpen={isTrailerOpen}
+            onClose={() => setIsTrailerOpen(false)}
+            trailerKey={trailerKey}
+          />
+        )}
       </div>
     </div>
   );

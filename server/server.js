@@ -5,10 +5,13 @@ import http from "http";
 import { Server } from "socket.io";
 import path from "path";
 import multer from "multer";
+import jwt from "jsonwebtoken";
+import { randomUUID } from "crypto";
 import { fileURLToPath } from "url";
 
 import connectDB from "./config/db.js";
 import Message from "./models/Message.js";
+import User from "./models/User.js";
 
 import authRoutes from "./routes/auth.routes.js";
 import userRoutes from "./routes/user.routes.js";
@@ -25,7 +28,11 @@ import notificationRoutes from "./routes/notification.routes.js";
 import adminRoutes from "./routes/admin.routes.js";
 import clubRoutes from "./routes/club.routes.js";
 import availabilityAlertRoutes from "./routes/availabilityAlert.routes.js";
+import alertRoutes from "./routes/alert.routes.js";
+import trendingRoutes from "./routes/trending.routes.js";
+import startAlertCron from "./cron/alertCron.js";
 import { verifyEmailTransport } from "./utils/sendEmail.js";
+import { protect } from "./middleware/authMiddleware.js";
 import {
   addOnlineUser,
   emitToUser,
@@ -39,6 +46,7 @@ const __dirname = path.dirname(__filename);
 
 connectDB();
 startReminderJob();
+startAlertCron();
 verifyEmailTransport();
 
 const app = express();
@@ -53,6 +61,21 @@ const corsOptions = {
       ? clientUrl
       : (origin, callback) => callback(null, true),
   credentials: true,
+};
+
+const normalizeSocketId = (value) => String(value || "").trim();
+const getSocketToken = (socket) => {
+  const authToken = socket?.handshake?.auth?.token;
+  if (typeof authToken === "string" && authToken.trim()) {
+    return authToken.replace(/^Bearer\s+/i, "").trim();
+  }
+
+  const headerToken = socket?.handshake?.headers?.authorization;
+  if (typeof headerToken === "string" && headerToken.trim()) {
+    return headerToken.replace(/^Bearer\s+/i, "").trim();
+  }
+
+  return "";
 };
 
 app.use(cors(corsOptions));
@@ -74,18 +97,39 @@ app.use("/api/notifications", notificationRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/clubs", clubRoutes);
 app.use("/api/availability-alerts", availabilityAlertRoutes);
+app.use("/api/alerts", alertRoutes);
+app.use("/api/trending", trendingRoutes);
 
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
     cb(null, path.join(__dirname, "uploads"));
   },
   filename: (req, file, cb) => {
-    cb(null, Date.now() + path.extname(file.originalname));
+    cb(null, `${Date.now()}-${randomUUID()}${path.extname(file.originalname)}`);
   },
 });
-const upload = multer({ storage });
+const ALLOWED_UPLOAD_MIME_TYPES = new Set([
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "image/gif",
+]);
 
-app.post("/api/chat/upload", upload.single("image"), (req, res) => {
+const upload = multer({
+  storage,
+  limits: {
+    fileSize: 5 * 1024 * 1024,
+  },
+  fileFilter: (req, file, cb) => {
+    if (!ALLOWED_UPLOAD_MIME_TYPES.has(file.mimetype)) {
+      cb(new Error("Only JPG, PNG, WEBP, and GIF image uploads are allowed"));
+      return;
+    }
+    cb(null, true);
+  },
+});
+
+app.post("/api/chat/upload", protect, upload.single("image"), (req, res) => {
   if (!req.file) return res.status(400).json({ message: "No file uploaded" });
   return res.json({ filePath: `/uploads/${req.file.filename}` });
 });
@@ -95,6 +139,20 @@ app.get("/", (req, res) => {
 });
 
 app.use((err, req, res, next) => {
+  if (err instanceof multer.MulterError) {
+    if (err.code === "LIMIT_FILE_SIZE") {
+      return res.status(413).json({ message: "File size exceeds 5MB limit" });
+    }
+    return res.status(400).json({ message: err.message || "Upload failed" });
+  }
+
+  if (
+    typeof err?.message === "string" &&
+    err.message.includes("Only JPG, PNG, WEBP, and GIF image uploads are allowed")
+  ) {
+    return res.status(400).json({ message: err.message });
+  }
+
   console.error(`Error: ${err.message}`);
   const statusCode = res.statusCode === 200 ? 500 : res.statusCode;
   res.status(statusCode).json({ message: err.message || "Internal Server Error" });
@@ -105,24 +163,67 @@ const io = new Server(server, {
 });
 setSocketServer(io);
 
+io.use(async (socket, next) => {
+  try {
+    const token = getSocketToken(socket);
+    if (!token) {
+      return next(new Error("Unauthorized"));
+    }
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const userId = normalizeSocketId(decoded?.id);
+    if (!userId) {
+      return next(new Error("Unauthorized"));
+    }
+
+    const user = await User.findById(userId).select("_id");
+    if (!user) {
+      return next(new Error("Unauthorized"));
+    }
+
+    socket.data.userId = String(user._id);
+    return next();
+  } catch (error) {
+    return next(new Error("Unauthorized"));
+  }
+});
+
 io.on("connection", (socket) => {
   console.log("User connected:", socket.id);
+  const socketUserId = normalizeSocketId(socket.data?.userId);
+  if (!socketUserId) {
+    socket.disconnect(true);
+    return;
+  }
 
-  socket.on("addUser", (userId) => {
-    const becameOnline = addOnlineUser(userId, socket.id);
-    if (becameOnline) {
-      io.emit("userOnline", String(userId));
+  const becameOnline = addOnlineUser(socketUserId, socket.id);
+  if (becameOnline) {
+    io.emit("userOnline", socketUserId);
+  }
+
+  socket.on("addUser", () => {
+    const online = addOnlineUser(socketUserId, socket.id);
+    if (online) {
+      io.emit("userOnline", socketUserId);
     }
   });
 
-  socket.on("sendMessage", async ({ senderId, receiverId, text, image, replyTo }) => {
+  socket.on("sendMessage", async (payload = {}) => {
     try {
+      const receiverId = normalizeSocketId(payload.receiverId);
+      const messageText = typeof payload.text === "string" ? payload.text.trim() : "";
+      const image = typeof payload.image === "string" ? payload.image.trim() : "";
+      const replyTo = normalizeSocketId(payload.replyTo);
+
+      if (!receiverId) return;
+      if (!messageText && !image) return;
+
       const message = await Message.create({
-        sender: senderId,
+        sender: socketUserId,
         receiver: receiverId,
-        text,
+        text: messageText,
         image,
-        replyTo,
+        replyTo: replyTo || undefined,
       });
 
       await message.populate("replyTo");
@@ -134,37 +235,54 @@ io.on("connection", (socket) => {
     }
   });
 
-  socket.on("typing", ({ senderId, receiverId }) => {
-    emitToUser(receiverId, "typing", { senderId });
+  socket.on("typing", ({ receiverId } = {}) => {
+    const targetId = normalizeSocketId(receiverId);
+    if (!targetId) return;
+    emitToUser(targetId, "typing", { senderId: socketUserId });
   });
 
-  socket.on("stopTyping", ({ senderId, receiverId }) => {
-    emitToUser(receiverId, "stopTyping", { senderId });
+  socket.on("stopTyping", ({ receiverId } = {}) => {
+    const targetId = normalizeSocketId(receiverId);
+    if (!targetId) return;
+    emitToUser(targetId, "stopTyping", { senderId: socketUserId });
   });
 
   socket.on("checkOnlineStatus", (userId, callback) => {
-    callback(isUserOnline(userId));
+    if (typeof callback === "function") {
+      callback(isUserOnline(userId));
+    }
   });
 
-  socket.on("markMessagesSeen", async ({ senderId, receiverId }) => {
+  socket.on("markMessagesSeen", async (payload = {}) => {
     try {
+      const senderId = normalizeSocketId(payload.senderId);
+      const receiverId = normalizeSocketId(payload.receiverId);
+      const peerId = normalizeSocketId(payload.peerId);
+      const otherUserId = [senderId, receiverId, peerId].find(
+        (candidate) => candidate && candidate !== socketUserId
+      );
+
+      if (!otherUserId) return;
+
       await Message.updateMany(
-        { sender: senderId, receiver: receiverId, seen: false },
+        { sender: otherUserId, receiver: socketUserId, seen: false },
         { $set: { seen: true } }
       );
 
-      emitToUser(senderId, "messagesSeen", { senderId: receiverId });
+      emitToUser(otherUserId, "messagesSeen", { senderId: socketUserId });
     } catch (error) {
       console.error("Error marking messages as seen:", error);
     }
   });
 
-  socket.on("editMessage", async ({ messageId, newText }) => {
+  socket.on("editMessage", async ({ messageId, newText } = {}) => {
     try {
       const message = await Message.findById(messageId);
       if (!message) return;
+      if (String(message.sender) !== socketUserId) return;
 
-      message.text = newText;
+      message.text = String(newText || "").trim();
+      if (!message.text) return;
       message.isEdited = true;
       await message.save();
 
@@ -175,19 +293,23 @@ io.on("connection", (socket) => {
     }
   });
 
-  socket.on("toggleReaction", async ({ messageId, userId, emoji }) => {
+  socket.on("toggleReaction", async ({ messageId, emoji } = {}) => {
     try {
       const message = await Message.findById(messageId);
       if (!message) return;
+      const userCanAccessMessage =
+        String(message.sender) === socketUserId || String(message.receiver) === socketUserId;
+      if (!userCanAccessMessage) return;
+      if (!String(emoji || "").trim()) return;
 
       const existingReactionIndex = message.reactions.findIndex(
-        (reaction) => reaction.user.toString() === userId && reaction.emoji === emoji
+        (reaction) => reaction.user.toString() === socketUserId && reaction.emoji === emoji
       );
 
       if (existingReactionIndex > -1) {
         message.reactions.splice(existingReactionIndex, 1);
       } else {
-        message.reactions.push({ user: userId, emoji });
+        message.reactions.push({ user: socketUserId, emoji });
       }
 
       await message.save();
@@ -199,10 +321,13 @@ io.on("connection", (socket) => {
     }
   });
 
-  socket.on("togglePin", async ({ messageId }) => {
+  socket.on("togglePin", async ({ messageId } = {}) => {
     try {
       const message = await Message.findById(messageId);
       if (!message) return;
+      const userCanAccessMessage =
+        String(message.sender) === socketUserId || String(message.receiver) === socketUserId;
+      if (!userCanAccessMessage) return;
 
       message.pinned = !message.pinned;
       await message.save();

@@ -44,7 +44,7 @@ const Home = () => {
       
       setFeed(prev => isLoadMore ? [...prev, ...reviews] : reviews);
       setHasMore(moreAvailable);
-    } catch (err) {
+    } catch {
       if (!isLoadMore) setFeed([]);
     } finally {
       setLoadingFeed(false);
@@ -67,23 +67,17 @@ const Home = () => {
       setLoadingSearch(true);
       setLoadingTrending(true);
       try {
-        const omdbKey = import.meta.env.VITE_OMDB_API_KEY;
-        
-        // Fetch Explore Movies (e.g., 2024)
-        const exploreRes = await fetch(`https://www.omdbapi.com/?s=2024&type=movie&apikey=${omdbKey}`);
-        const exploreData = await exploreRes.json();
-        if (exploreData.Response === "True") {
-          setExploreMovies(exploreData.Search);
-        }
+        const [exploreRes, trendingRes] = await Promise.all([
+          api.get("/api/movies/explore"),
+          api.get("/api/movies/trending"),
+        ]);
 
-        // Fetch Trending Movies (e.g., Marvel)
-        const trendingRes = await fetch(`https://www.omdbapi.com/?s=Marvel&type=movie&apikey=${omdbKey}`);
-        const trendingData = await trendingRes.json();
-        if (trendingData.Response === "True") {
-          setTrendingMovies(trendingData.Search);
-        }
+        setExploreMovies(exploreRes.data || []);
+        setTrendingMovies(trendingRes.data || []);
       } catch (err) {
         console.error("Failed to fetch initial movies", err);
+        setExploreMovies([]);
+        setTrendingMovies([]);
       } finally {
         setLoadingSearch(false);
         setLoadingTrending(false);
@@ -104,7 +98,7 @@ const Home = () => {
         prev.map((r) => (r._id === reviewId ? { ...r, likes: res.data.likes } : r))
       );
 
-    } catch (err) {
+    } catch {
       toast.error("Failed to update like.");
     }
   };
@@ -126,7 +120,7 @@ const Home = () => {
 
       setCommentText("");
       toast.success("Comment posted!");
-    } catch (err) {
+    } catch {
       toast.error("Failed to post comment.");
     }
   };
@@ -142,7 +136,7 @@ const Home = () => {
       setEditingComment(null);
       setEditText("");
       toast.success("Comment updated!");
-    } catch (err) {
+    } catch {
       toast.error("Failed to update comment.");
     }
   };
@@ -155,7 +149,7 @@ const Home = () => {
         prev.map((r) => (r._id === reviewId ? { ...r, comments: res.data.comments } : r))
       );
       toast.success("Comment deleted");
-    } catch (err) {
+    } catch {
       toast.error("Failed to delete comment.");
     }
   };
@@ -196,7 +190,7 @@ const Home = () => {
       } else {
         toast.error(`User "@${username}" not found`);
       }
-    } catch (err) {
+    } catch {
       toast.error("Could not resolve user mention");
     }
   };
@@ -277,15 +271,14 @@ const Home = () => {
     setLoadingSearch(true);
     setError(null);
     try {
-      const omdbKey = import.meta.env.VITE_OMDB_API_KEY;
-      const res = await fetch(`https://www.omdbapi.com/?s=${query}&apikey=${omdbKey}`);
-      const data = await res.json();
-      if (data.Response === "True") {
-        setMovies(data.Search);
-      } else {
-        setError(data.Error || "No movies found.");
+      const res = await api.get(`/api/movies/search?q=${encodeURIComponent(query.trim())}`);
+      const results = res.data || [];
+      setMovies(results);
+
+      if (!results.length) {
+        setError("No movies found.");
       }
-    } catch (err) {
+    } catch {
       setError("Failed to search movies. Please try again.");
     } finally {
       setLoadingSearch(false);

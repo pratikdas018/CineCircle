@@ -1,7 +1,6 @@
-import axios from "axios";
+import { hasTmdbApiKey, tmdbRequest } from "./tmdb.js";
 
 const normalize = (value = "") => String(value).trim().toLowerCase();
-
 const getProviderGroups = (regionData = {}) => {
   return [
     ...(regionData.flatrate || []),
@@ -15,23 +14,22 @@ export const resolveTmdbMovieId = async (movieId) => {
   if (!raw) return null;
   if (!raw.startsWith("tt")) return raw;
 
-  if (!process.env.TMDB_BASE_URL || !process.env.TMDB_API_KEY) {
+  if (!hasTmdbApiKey()) {
     return null;
   }
 
-  const findResponse = await axios.get(`${process.env.TMDB_BASE_URL}/find/${raw}`, {
-    params: {
-      api_key: process.env.TMDB_API_KEY,
-      external_source: "imdb_id",
-    },
-  });
+  const findResponse = await tmdbRequest(
+    `/find/${raw}`,
+    { external_source: "imdb_id" },
+    { includeLanguage: false }
+  );
 
-  const match = findResponse.data?.movie_results?.[0];
+  const match = findResponse?.movie_results?.[0];
   return match?.id ? String(match.id) : null;
 };
 
 export const fetchProvidersByRegion = async (movieId, region = "IN") => {
-  if (!process.env.TMDB_BASE_URL || !process.env.TMDB_API_KEY) {
+  if (!hasTmdbApiKey()) {
     return { providers: [], link: "", available: false, resolvedMovieId: null };
   }
 
@@ -40,14 +38,13 @@ export const fetchProvidersByRegion = async (movieId, region = "IN") => {
     return { providers: [], link: "", available: false, resolvedMovieId: null };
   }
 
-  const response = await axios.get(
-    `${process.env.TMDB_BASE_URL}/movie/${resolvedMovieId}/watch/providers`,
-    {
-      params: { api_key: process.env.TMDB_API_KEY },
-    }
+  const response = await tmdbRequest(
+    `/movie/${resolvedMovieId}/watch/providers`,
+    {},
+    { includeLanguage: false }
   );
 
-  const allRegions = response.data?.results || {};
+  const allRegions = response?.results || {};
   const regionData = allRegions[region] || null;
   if (!regionData) {
     return { providers: [], link: "", available: false, resolvedMovieId };

@@ -1,15 +1,15 @@
-import { createContext, useEffect, useState } from "react";
+import { createContext, useEffect, useMemo } from "react";
 import { io } from "socket.io-client";
 
+// eslint-disable-next-line react-refresh/only-export-components
 export const SocketContext = createContext();
 
 export const SocketProvider = ({ children, user }) => {
-  const [socket, setSocket] = useState(null);
+  const token = user?.token || "";
 
-  useEffect(() => {
-    if (!user) {
-      setSocket(null);
-      return;
+  const socket = useMemo(() => {
+    if (!token) {
+      return null;
     }
 
     const socketBaseUrl =
@@ -17,19 +17,23 @@ export const SocketProvider = ({ children, user }) => {
       import.meta.env.VITE_API_BASE_URL ||
       "http://localhost:5000";
 
-    const newSocket = io(socketBaseUrl, {
+    return io(socketBaseUrl, {
       transports: ["websocket", "polling"],
       withCredentials: true,
+      auth: {
+        token: `Bearer ${token}`,
+      },
     });
-    setSocket(newSocket);
+  }, [token]);
 
-    newSocket.emit("addUser", user._id);
+  useEffect(() => {
+    if (!socket) return;
 
+    socket.emit("addUser");
     return () => {
-      newSocket.close();
-      setSocket(null);
+      socket.close();
     };
-  }, [user]);
+  }, [socket]);
 
   return (
     <SocketContext.Provider value={socket}>

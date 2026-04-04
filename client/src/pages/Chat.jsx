@@ -41,6 +41,7 @@ const Chat = () => {
   const { id } = useParams();
   const socket = useContext(SocketContext);
   const { user } = useContext(AuthContext);
+  const userId = user?._id || "";
   const [messages, setMessages] = useState([]);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -58,7 +59,6 @@ const Chat = () => {
   const [isTyping, setIsTyping] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const messagesEndRef = useRef(null);
   const typingTimeoutRef = useRef(null);
   const textareaRef = useRef(null);
   const chatContainerRef = useRef(null);
@@ -73,11 +73,15 @@ const Chat = () => {
     });
   };
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  const scrollToBottom = (behavior = "smooth") => {
+    const container = chatContainerRef.current;
+    if (!container) return;
+    container.scrollTo({ top: container.scrollHeight, behavior });
   };
 
   useEffect(() => {
+    if (!userId) return;
+
     setLoading(true);
     setIsTyping(false);
     
@@ -86,24 +90,24 @@ const Chat = () => {
     api.get(`/api/chat/${id}`)
       .then((res) => {
         setMessages(res.data);
-        scrollToBottom();
+        requestAnimationFrame(() => scrollToBottom("auto"));
         // Mark messages as seen when chat opens
         if (socket && socket.connected) {
-          socket.emit("markMessagesSeen", { senderId: id, receiverId: user._id });
+          socket.emit("markMessagesSeen", { peerId: id });
         }
       })
       .catch(() => setError("Failed to load messages."))
       .finally(() => setLoading(false));
-  }, [id]);
+  }, [id, socket, userId]);
 
   useEffect(() => {
     const lastMessage = messages[messages.length - 1];
-    const isOwnMessage = lastMessage?.sender === user._id;
+    const isOwnMessage = lastMessage?.sender === userId;
     
     if (isOwnMessage || !showScrollBottom) {
       scrollToBottom();
     }
-  }, [messages, isTyping, isSearchOpen, searchResults]);
+  }, [messages, isTyping, isSearchOpen, searchResults, showScrollBottom, userId]);
 
   useEffect(() => {
     if (textareaRef.current) {
@@ -133,13 +137,13 @@ const Chat = () => {
         setMessages((prev) => [...prev, msg]);
         
         // Play sound if message is from the other person
-        if (msg.sender === id) {
+      if (msg.sender === id) {
           if (!isMuted) {
             const audio = new Audio("/receive.mp3");
             audio.play().catch(e => console.error("Audio play failed", e));
           }
           // Mark as seen immediately if we are in this chat
-          socket.emit("markMessagesSeen", { senderId: id, receiverId: user._id });
+          socket.emit("markMessagesSeen", { peerId: id });
         }
       }
     };
@@ -147,7 +151,7 @@ const Chat = () => {
     const handleMessagesSeen = ({ senderId }) => {
       if (senderId === id) {
         setMessages((prev) =>
-          prev.map((msg) => (msg.sender === user._id ? { ...msg, seen: true } : msg))
+          prev.map((msg) => (msg.sender === userId ? { ...msg, seen: true } : msg))
         );
       }
     };
@@ -193,18 +197,18 @@ const Chat = () => {
       socket.off("userOffline", handleUserOffline);
       socket.off("messageDeleted", handleMessageDeleted);
     };
-  }, [socket, id, isMuted]);
+  }, [socket, id, isMuted, userId]);
 
   const handleInputChange = (e) => {
     setText(e.target.value);
 
     if (socket && socket.connected) {
-      socket.emit("typing", { senderId: user._id, receiverId: id });
+      socket.emit("typing", { receiverId: id });
 
       if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
 
       typingTimeoutRef.current = setTimeout(() => {
-        socket.emit("stopTyping", { senderId: user._id, receiverId: id });
+        socket.emit("stopTyping", { receiverId: id });
       }, 2000);
     }
   };
@@ -236,7 +240,6 @@ const Chat = () => {
     
     if (socket && socket.connected) {
       socket.emit("sendMessage", {
-        senderId: user._id,
         receiverId: id,
         text,
         image: imagePath,
@@ -244,7 +247,7 @@ const Chat = () => {
       });
       
       // Stop typing immediately when sending
-      socket.emit("stopTyping", { senderId: user._id, receiverId: id });
+      socket.emit("stopTyping", { receiverId: id });
       if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
       
       if (!isMuted) {
@@ -272,8 +275,7 @@ const Chat = () => {
       await api.delete(`/api/chat/${id}/me`);
       setMessages([]);
       toast.success("Chat history cleared");
-    } catch (err) {
-      console.error("Failed to clear chat", err);
+    } catch {
       toast.error("Failed to clear chat");
     }
   };
@@ -313,7 +315,7 @@ const Chat = () => {
       if (socket && socket.connected) {
         socket.emit("deleteMessage", { messageId: msgId, conversationId: id });
       }
-    } catch (err) {
+    } catch {
       toast.error("Failed to delete message");
     }
   };
@@ -326,7 +328,7 @@ const Chat = () => {
       setMessages((prev) => prev.filter((msg) => msg._id !== msgId));
       setSearchResults((prev) => prev.filter((msg) => msg._id !== msgId));
       toast.success("Message deleted for you");
-    } catch (err) {
+    } catch {
       toast.error("Failed to delete message");
     }
   };
@@ -335,7 +337,7 @@ const Chat = () => {
     setShowReactionPickerId(null);
 
     if (socket && socket.connected) {
-      socket.emit("toggleReaction", { messageId: msgId, userId: user._id, emoji });
+      socket.emit("toggleReaction", { messageId: msgId, emoji });
     } else {
       try {
         const res = await api.put(`/api/chat/messages/${msgId}/reaction`, { emoji });
@@ -487,7 +489,8 @@ const Chat = () => {
           ) : displayedMessages.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full text-gray-500 opacity-60">
               <span className="text-4xl mb-2">👋</span>
-              <p>{isSearchOpen && searchQuery ? "No matches found." : "No messages yet. Say hi!"}</p>
+                    <p>{isSearchOpen && searchQuery ? "No matches found." : "No messages yet. Say hi!"}</p>
+                    {isSearching && <p className="mt-2 text-xs">Searching...</p>}
             </div>
           ) : (
             displayedMessages.map((m, i) => (
@@ -634,7 +637,6 @@ const Chat = () => {
               </div>
             </div>
           )}
-          <div ref={messagesEndRef} />
         </div>
 
           {showScrollBottom && (

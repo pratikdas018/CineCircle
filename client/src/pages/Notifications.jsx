@@ -169,6 +169,18 @@ const Notifications = () => {
             ))}
           </div>
         )}
+
+        {!loading && hasMore && (
+          <div className="mt-8 flex justify-center">
+            <button
+              onClick={handleLoadMore}
+              disabled={loadingMore}
+              className="rounded-full border border-slate-200 bg-white px-6 py-2 text-sm font-bold text-slate-900 transition hover:bg-slate-50 disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800"
+            >
+              {loadingMore ? "Loading..." : "Load More"}
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

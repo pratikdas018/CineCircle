@@ -1,112 +1,200 @@
-import axios from "axios";
-
-
 import Watchlist from "../models/Watchlist.js";
-import Review from "../models/Review.js";
+import { resolveTmdbMovieId } from "../utils/providerAvailability.js";
+import {
+  hasTmdbApiKey,
+  mapTmdbMovieToCard,
+  mapTmdbMovieToDetails,
+  tmdbRequest,
+} from "../utils/tmdb.js";
 
-const fetchTrendingFallback = async (apiKey) => {
-  try {
-    const randomPage = Math.floor(Math.random() * 10) + 1; // Random page 1-10
-    const response = await axios.get(`https://www.omdbapi.com/?s=2024&page=${randomPage}&type=movie&apikey=${apiKey}`);
-    return response.data.Response === "True" ? response.data.Search.slice(0, 10) : [];
-  } catch (error) {
-    return [];
-  }
+const normalizePage = (value, fallback = 1) => {
+  const parsed = Number(value);
+  if (Number.isNaN(parsed)) return fallback;
+  return Math.min(Math.max(parsed, 1), 20);
+};
+
+const randomPage = (max = 5) => Math.floor(Math.random() * max) + 1;
+
+const toCardList = (movies = []) =>
+  (movies || [])
+    .map((movie) => mapTmdbMovieToCard(movie))
+    .filter((movie) => Boolean(movie.imdbID));
+
+const getTrendingFallback = async () => {
+  if (!hasTmdbApiKey()) return [];
+
+  const data = await tmdbRequest("/trending/movie/week", {
+    page: randomPage(5),
+    include_adult: false,
+  });
+
+  return toCardList(data.results || []).slice(0, 10);
+};
+
+const assertTmdbConfigured = (res) => {
+  if (hasTmdbApiKey()) return true;
+  res.status(500).json({ message: "TMDB_API_KEY is not configured on server" });
+  return false;
 };
 
 export const getRecommendations = async (req, res) => {
   try {
-    const OMDB_API_KEY = process.env.TMDB_API_KEY?.trim();
-    
-    if (!OMDB_API_KEY) {
-      console.error("CRITICAL: OMDb API Key is missing in server .env");
-      return res.json([]);
+    if (!assertTmdbConfigured(res)) return;
+
+    const watchedMovies = await Watchlist.find({ user: req.user._id })
+      .sort({ createdAt: -1 })
+      .limit(15);
+
+    const resolvedWatchlistTmdbIds = [
+      ...new Set(
+        (
+          await Promise.all(
+            watchedMovies.map((movie) =>
+              resolveTmdbMovieId(movie.movieId).catch(() => null)
+            )
+          )
+        )
+          .filter(Boolean)
+          .map((id) => String(id))
+      ),
+    ];
+
+    if (!resolvedWatchlistTmdbIds.length) {
+      return res.json(await getTrendingFallback());
     }
 
-    const userId = req.user._id;
-    // Get the last 10 movies from the watchlist to analyze taste
-    const watched = await Watchlist.find({ user: userId }).sort({ createdAt: -1 }).limit(10);
-    
-    // Filter to ensure we only use valid IMDb IDs (starting with 'tt')
-    const movieIds = watched
-      .map((m) => m.movieId)
-      .filter(id => typeof id === 'string' && id.startsWith('tt'));
-
-    if (movieIds.length === 0) return res.json(await fetchTrendingFallback(OMDB_API_KEY));
-
-    // 1. Fetch details for the last few movies in parallel to aggregate genres
-    // We limit to 5 to avoid hitting OMDb rate limits too quickly
-    const sampleIds = movieIds.slice(0, 5);
-    const detailsResponses = await Promise.all(
-      sampleIds.map(id => 
-        axios.get(`https://www.omdbapi.com/?i=${id}&apikey=${OMDB_API_KEY}`).catch(() => null)
-      )
+    const sampleIds = resolvedWatchlistTmdbIds.slice(0, 5);
+    const sampledMovies = await Promise.all(
+      sampleIds.map((id) => tmdbRequest(`/movie/${id}`).catch(() => null))
     );
 
-    const genreCounts = {};
-    detailsResponses.forEach(res => {
-      if (res?.data?.Response === "True" && res.data.Genre && res.data.Genre !== "N/A") {
-        const genres = res.data.Genre.split(",").map(g => g.trim());
-        genres.forEach(g => {
-          genreCounts[g] = (genreCounts[g] || 0) + 1;
-        });
-      }
+    const genreCounter = new Map();
+    sampledMovies.forEach((movie) => {
+      (movie?.genres || []).forEach((genre) => {
+        const existing = genreCounter.get(genre.id) || {
+          id: genre.id,
+          name: genre.name,
+          count: 0,
+        };
+        existing.count += 1;
+        genreCounter.set(genre.id, existing);
+      });
     });
 
-    // 2. Sort genres by frequency and pick one of the top 3
-    const sortedGenres = Object.keys(genreCounts).sort((a, b) => genreCounts[b] - genreCounts[a]);
-    
-    if (sortedGenres.length === 0) return res.json(await fetchTrendingFallback(OMDB_API_KEY));
+    const sortedGenres = [...genreCounter.values()].sort((a, b) => b.count - a.count);
+
+    if (!sortedGenres.length) {
+      return res.json(await getTrendingFallback());
+    }
 
     const topGenres = sortedGenres.slice(0, 3);
     const selectedGenre = topGenres[Math.floor(Math.random() * topGenres.length)];
 
-    const randomPage = Math.floor(Math.random() * 5) + 1; // Random page 1-5
-    const recommendations = await axios.get(`https://www.omdbapi.com/?s=${selectedGenre}&page=${randomPage}&apikey=${OMDB_API_KEY}`);
+    const discovered = await tmdbRequest("/discover/movie", {
+      with_genres: selectedGenre.id,
+      sort_by: "popularity.desc",
+      include_adult: false,
+      page: randomPage(5),
+    });
 
-    if (recommendations.data.Response === "True") {
-      // Return results in OMDb format (Title, Year, imdbID, Poster)
-      res.json(recommendations.data.Search.slice(0, 10));
-    } else {
-      res.json(await fetchTrendingFallback(OMDB_API_KEY));
+    const recommendations = toCardList(discovered.results || [])
+      .filter((movie) => !resolvedWatchlistTmdbIds.includes(movie.tmdbID))
+      .slice(0, 10);
+
+    if (!recommendations.length) {
+      return res.json(await getTrendingFallback());
     }
+
+    return res.json(recommendations);
   } catch (error) {
     console.error("Recommendation Error:", error.message);
-    res.json([]); // Return empty array instead of 500 to keep UI stable
+    return res.json([]);
   }
 };
 
-// 🔍 Search Movies
 export const searchMovies = async (req, res) => {
   try {
-    const OMDB_API_KEY = process.env.TMDB_API_KEY?.trim();
-    const query = req.query.q;
-    if (!query) return res.status(400).json({ message: "Query is required" });
+    if (!assertTmdbConfigured(res)) return;
 
-    const response = await axios.get(`https://www.omdbapi.com/?s=${query}&apikey=${OMDB_API_KEY}`);
-    
-    if (response.data.Response === "True") {
-      res.json(response.data.Search);
-    } else {
-      res.json([]);
+    const query = String(req.query.q || "").trim();
+    if (!query) {
+      return res.status(400).json({ message: "Query is required" });
     }
+
+    const page = normalizePage(req.query.page, 1);
+    const data = await tmdbRequest("/search/movie", {
+      query,
+      include_adult: false,
+      page,
+    });
+
+    return res.json(toCardList(data.results || []));
   } catch (error) {
     console.error("Search Error:", error.message);
-    res.status(500).json({ message: error.message });
+    return res.status(500).json({ message: error.message || "Failed to search movies" });
   }
 };
 
-// 🎬 Get Movie Details
+export const getTrendingMovies = async (req, res) => {
+  try {
+    if (!assertTmdbConfigured(res)) return;
+
+    const page = normalizePage(req.query.page, 1);
+    const data = await tmdbRequest("/trending/movie/week", {
+      include_adult: false,
+      page,
+    });
+
+    return res.json(toCardList(data.results || []).slice(0, 20));
+  } catch (error) {
+    console.error("Trending Error:", error.message);
+    return res.status(500).json({ message: error.message || "Failed to load trending movies" });
+  }
+};
+
+export const getExploreMovies = async (req, res) => {
+  try {
+    if (!assertTmdbConfigured(res)) return;
+
+    const page = normalizePage(req.query.page, randomPage(5));
+    const data = await tmdbRequest("/discover/movie", {
+      sort_by: "popularity.desc",
+      include_adult: false,
+      page,
+    });
+
+    return res.json(toCardList(data.results || []).slice(0, 20));
+  } catch (error) {
+    console.error("Explore Error:", error.message);
+    return res.status(500).json({ message: error.message || "Failed to load explore movies" });
+  }
+};
+
 export const getMovieDetails = async (req, res) => {
   try {
-    const OMDB_API_KEY = process.env.TMDB_API_KEY?.trim();
-    const movieId = req.params.id;
+    if (!assertTmdbConfigured(res)) return;
 
-    const response = await axios.get(`https://www.omdbapi.com/?i=${movieId}&plot=full&apikey=${OMDB_API_KEY}`);
-    
-    res.json(response.data);
+    const rawMovieId = String(req.params.id || "").trim();
+    if (!rawMovieId) {
+      return res.status(400).json({ message: "Movie id is required" });
+    }
+
+    const resolvedTmdbId = await resolveTmdbMovieId(rawMovieId);
+    if (!resolvedTmdbId) {
+      return res.status(404).json({ message: "Movie not found" });
+    }
+
+    const movie = await tmdbRequest(`/movie/${resolvedTmdbId}`, {
+      append_to_response: "credits,videos,external_ids",
+    });
+
+    return res.json(mapTmdbMovieToDetails(movie, rawMovieId));
   } catch (error) {
+    if (error.response?.status === 404 || error.status === 404) {
+      return res.status(404).json({ message: "Movie not found" });
+    }
+
     console.error("Movie Details Error:", error.message);
-    res.status(500).json({ message: error.message });
+    return res.status(500).json({ message: error.message || "Failed to fetch movie details" });
   }
 };

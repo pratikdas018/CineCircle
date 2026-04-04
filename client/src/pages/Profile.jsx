@@ -42,7 +42,7 @@ const Profile = () => {
       updateUser(res.data); // This updates the Navbar instantly
       setIsEditing(false);
       toast.success("Profile updated!");
-    } catch (err) {
+    } catch {
       toast.error("Failed to update profile.");
     }
   };

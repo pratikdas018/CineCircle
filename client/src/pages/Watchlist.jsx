@@ -18,7 +18,7 @@ const Watchlist = () => {
     try {
       await api.delete(`/api/watchlist/${id}`);
       setMovies(movies.filter((m) => m.movieId !== id));
-    } catch (err) {
+    } catch {
       setError("Failed to remove movie. Please try again.");
     }
   };

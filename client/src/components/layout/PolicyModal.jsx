@@ -2,6 +2,7 @@ import React from "react";
 import { motion } from "framer-motion";
 
 const PolicyModal = ({ activePolicy, onClose }) => {
+  const MotionDiv = motion.div;
   const policies = {
     privacy: {
       title: "Privacy Policy",
@@ -34,14 +35,14 @@ const PolicyModal = ({ activePolicy, onClose }) => {
 
         {isTerms ? (
           <div className="relative mb-8 h-56 overflow-hidden rounded-xl border-y border-gray-200 bg-gray-50 [perspective:400px] dark:border-gray-800 dark:bg-black/20 sm:h-64">
-            <motion.div 
+            <MotionDiv 
               initial={{ y: "100%", opacity: 0 }}
               animate={{ y: "-150%", opacity: [0, 1, 1, 0] }}
               transition={{ duration: 25, ease: "linear", repeat: Infinity }}
               className="text-yellow-500 font-black text-center leading-loose [transform:rotateX(25deg)] origin-bottom uppercase tracking-tighter px-4"
             >
               {policy.content}
-            </motion.div>
+            </MotionDiv>
           </div>
         ) : (
           <p className="text-gray-600 dark:text-gray-400 leading-relaxed mb-8">

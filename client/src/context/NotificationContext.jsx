@@ -3,6 +3,7 @@ import api from "../services/api";
 import { AuthContext } from "./AuthContext";
 import { SocketContext } from "./SocketContext";
 
+// eslint-disable-next-line react-refresh/only-export-components
 export const NotificationContext = createContext();
 
 const SOUND_CANDIDATES = {
@@ -33,21 +34,31 @@ export const NotificationProvider = ({ children }) => {
   const latestNotificationIdRef = useRef(null);
 
   const fetchUnreadCount = useCallback(async () => {
-    if (!user) {
-      setUnreadCount(0);
-      return;
-    }
+    if (!user) return 0;
 
     try {
       const res = await api.get("/api/notifications/unread-count");
-      setUnreadCount(Number(res.data.count || 0));
+      return Number(res.data.count || 0);
     } catch (error) {
       console.error("Failed to fetch unread count", error);
+      return null;
     }
   }, [user]);
 
   useEffect(() => {
-    fetchUnreadCount();
+    let isActive = true;
+
+    const loadUnreadCount = async () => {
+      const nextUnreadCount = await fetchUnreadCount();
+      if (!isActive || !Number.isFinite(nextUnreadCount)) return;
+      setUnreadCount(Math.max(0, nextUnreadCount));
+    };
+
+    void loadUnreadCount();
+
+    return () => {
+      isActive = false;
+    };
   }, [fetchUnreadCount]);
 
   useEffect(() => {
@@ -102,6 +113,12 @@ export const NotificationProvider = ({ children }) => {
     };
   }, [socket, user]);
 
+  const refetchUnreadCount = useCallback(async () => {
+    const nextUnreadCount = await fetchUnreadCount();
+    if (!Number.isFinite(nextUnreadCount)) return;
+    setUnreadCount(Math.max(0, nextUnreadCount));
+  }, [fetchUnreadCount]);
+
   return (
     <NotificationContext.Provider
       value={{
@@ -109,7 +126,7 @@ export const NotificationProvider = ({ children }) => {
         setUnreadCount,
         latestNotification,
         setLatestNotification,
-        refetchUnreadCount: fetchUnreadCount,
+        refetchUnreadCount,
       }}
     >
       {children}

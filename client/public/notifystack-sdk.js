@@ -9,7 +9,6 @@
   var apiBase = explicitApiBase || scriptUrl.origin;
 
   if (!websiteId) {
-    // eslint-disable-next-line no-console
     console.error("NotifyStack SDK: data-website-id is required");
     return;
   }
@@ -125,7 +124,6 @@
         });
       })
       .catch(function (error) {
-        // eslint-disable-next-line no-console
         console.error("NotifyStack SDK:", error.message || error);
       });
   };
