@@ -32,6 +32,7 @@ const Home = () => {
   const [mentionSearch, setMentionSearch] = useState("");
   const [activeMentionInput, setActiveMentionInput] = useState(null); // 'new' or 'edit'
   const [mentionStartIndex, setMentionStartIndex] = useState(-1);
+  const MOVIE_REQUEST_TIMEOUT_MS = 12_000;
 
   // 📰 Load friends activity feed
   const fetchFeed = async (pageNum, isLoadMore = false) => {
@@ -39,7 +40,9 @@ const Home = () => {
     else setLoadingFeed(true);
 
     try {
-      const res = await api.get(`/api/reviews/feed/friends?page=${pageNum}&limit=9`);
+      const res = await api.get(`/api/reviews/feed/friends?page=${pageNum}&limit=9`, {
+        timeout: MOVIE_REQUEST_TIMEOUT_MS,
+      });
       const { reviews, hasMore: moreAvailable } = res.data;
       
       setFeed(prev => isLoadMore ? [...prev, ...reviews] : reviews);
@@ -55,35 +58,52 @@ const Home = () => {
   useEffect(() => {
     if (user) {
       fetchFeed(1);
-      api.get("/api/friends")
+      api.get("/api/friends", { timeout: MOVIE_REQUEST_TIMEOUT_MS })
         .then(res => setFriends(res.data))
         .catch(err => console.error("Failed to fetch friends", err));
     }
   }, [user]);
 
   // 🎬 Load initial movies to avoid a blank page
-  useEffect(() => {
-    const fetchInitialMovies = async () => {
-      setLoadingSearch(true);
-      setLoadingTrending(true);
-      try {
-        const [exploreRes, trendingRes] = await Promise.all([
-          api.get("/api/movies/explore"),
-          api.get("/api/movies/trending"),
-        ]);
+  const loadInitialMovies = async () => {
+    setLoadingSearch(true);
+    setLoadingTrending(true);
+    setError(null);
 
-        setExploreMovies(exploreRes.data || []);
-        setTrendingMovies(trendingRes.data || []);
-      } catch (err) {
-        console.error("Failed to fetch initial movies", err);
+    try {
+      const [exploreResult, trendingResult] = await Promise.allSettled([
+        api.get("/api/movies/explore", { timeout: MOVIE_REQUEST_TIMEOUT_MS }),
+        api.get("/api/movies/trending", { timeout: MOVIE_REQUEST_TIMEOUT_MS }),
+      ]);
+
+      if (exploreResult.status === "fulfilled") {
+        setExploreMovies(exploreResult.value?.data || []);
+      } else {
         setExploreMovies([]);
-        setTrendingMovies([]);
-      } finally {
-        setLoadingSearch(false);
-        setLoadingTrending(false);
       }
-    };
-    fetchInitialMovies();
+
+      if (trendingResult.status === "fulfilled") {
+        setTrendingMovies(trendingResult.value?.data || []);
+      } else {
+        setTrendingMovies([]);
+      }
+
+      if (exploreResult.status === "rejected" && trendingResult.status === "rejected") {
+        setError("Movie service is temporarily unavailable. Please try again.");
+      }
+    } catch (err) {
+      console.error("Failed to fetch initial movies", err);
+      setExploreMovies([]);
+      setTrendingMovies([]);
+      setError("Movie service is temporarily unavailable. Please try again.");
+    } finally {
+      setLoadingSearch(false);
+      setLoadingTrending(false);
+    }
+  };
+
+  useEffect(() => {
+    loadInitialMovies();
   }, []);
 
   const handleLike = async (reviewId) => {
@@ -271,7 +291,9 @@ const Home = () => {
     setLoadingSearch(true);
     setError(null);
     try {
-      const res = await api.get(`/api/movies/search?q=${encodeURIComponent(query.trim())}`);
+      const res = await api.get(`/api/movies/search?q=${encodeURIComponent(query.trim())}`, {
+        timeout: MOVIE_REQUEST_TIMEOUT_MS,
+      });
       const results = res.data || [];
       setMovies(results);
 
@@ -408,6 +430,22 @@ const Home = () => {
                           </div>
                         </Link>
                       ))}
+                    </div>
+                  </section>
+                )}
+
+                {trendingMovies.length === 0 && exploreMovies.length === 0 && (
+                  <section className="mb-16">
+                    <div className="rounded-xl border border-slate-200 bg-slate-50 px-5 py-6 text-center dark:border-slate-800 dark:bg-slate-900/40">
+                      <p className="text-sm text-slate-600 dark:text-slate-300">
+                        Movie lists are unavailable right now.
+                      </p>
+                      <button
+                        onClick={loadInitialMovies}
+                        className="mt-3 rounded-full bg-indigo-600 px-5 py-2 text-sm font-semibold text-white transition hover:bg-indigo-500"
+                      >
+                        Retry
+                      </button>
                     </div>
                   </section>
                 )}
@@ -638,3 +676,4 @@ const Home = () => {
 };
 
 export default Home;
+

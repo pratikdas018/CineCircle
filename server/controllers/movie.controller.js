@@ -23,16 +23,27 @@ const toCardList = (movies = []) =>
 const getTrendingFallback = async () => {
   if (!hasTmdbApiKey()) return [];
 
-  const data = await tmdbRequest("/trending/movie/week", {
-    page: randomPage(5),
-    include_adult: false,
-  });
+  const data = await tmdbRequest(
+    "/trending/movie/week",
+    {
+      page: randomPage(5),
+      include_adult: false,
+    },
+    { timeout: 7_000, retries: 0 }
+  );
 
   return toCardList(data.results || []).slice(0, 10);
 };
 
-const assertTmdbConfigured = (res) => {
+const assertTmdbConfigured = (res, options = {}) => {
+  const fallbackArray = options.fallbackArray === true;
   if (hasTmdbApiKey()) return true;
+
+  if (fallbackArray) {
+    res.status(200).json([]);
+    return false;
+  }
+
   res.status(500).json({
     message: "TMDB credentials are not configured on server (TMDB_API_KEY or TMDB_READ_ACCESS_TOKEN)",
   });
@@ -41,7 +52,7 @@ const assertTmdbConfigured = (res) => {
 
 export const getRecommendations = async (req, res) => {
   try {
-    if (!assertTmdbConfigured(res)) return;
+    if (!assertTmdbConfigured(res, { fallbackArray: true })) return;
 
     const watchedMovies = await Watchlist.find({ user: req.user._id })
       .sort({ createdAt: -1 })
@@ -67,7 +78,9 @@ export const getRecommendations = async (req, res) => {
 
     const sampleIds = resolvedWatchlistTmdbIds.slice(0, 5);
     const sampledMovies = await Promise.all(
-      sampleIds.map((id) => tmdbRequest(`/movie/${id}`).catch(() => null))
+      sampleIds.map((id) =>
+        tmdbRequest(`/movie/${id}`, {}, { timeout: 7_000, retries: 0 }).catch(() => null)
+      )
     );
 
     const genreCounter = new Map();
@@ -92,12 +105,16 @@ export const getRecommendations = async (req, res) => {
     const topGenres = sortedGenres.slice(0, 3);
     const selectedGenre = topGenres[Math.floor(Math.random() * topGenres.length)];
 
-    const discovered = await tmdbRequest("/discover/movie", {
-      with_genres: selectedGenre.id,
-      sort_by: "popularity.desc",
-      include_adult: false,
-      page: randomPage(5),
-    });
+    const discovered = await tmdbRequest(
+      "/discover/movie",
+      {
+        with_genres: selectedGenre.id,
+        sort_by: "popularity.desc",
+        include_adult: false,
+        page: randomPage(5),
+      },
+      { timeout: 7_000, retries: 0 }
+    );
 
     const recommendations = toCardList(discovered.results || [])
       .filter((movie) => !resolvedWatchlistTmdbIds.includes(movie.tmdbID))
@@ -139,36 +156,44 @@ export const searchMovies = async (req, res) => {
 
 export const getTrendingMovies = async (req, res) => {
   try {
-    if (!assertTmdbConfigured(res)) return;
+    if (!assertTmdbConfigured(res, { fallbackArray: true })) return;
 
     const page = normalizePage(req.query.page, 1);
-    const data = await tmdbRequest("/trending/movie/week", {
-      include_adult: false,
-      page,
-    });
+    const data = await tmdbRequest(
+      "/trending/movie/week",
+      {
+        include_adult: false,
+        page,
+      },
+      { timeout: 7_000, retries: 0 }
+    );
 
     return res.json(toCardList(data.results || []).slice(0, 20));
   } catch (error) {
     console.error("Trending Error:", error.message);
-    return res.status(500).json({ message: error.message || "Failed to load trending movies" });
+    return res.json([]);
   }
 };
 
 export const getExploreMovies = async (req, res) => {
   try {
-    if (!assertTmdbConfigured(res)) return;
+    if (!assertTmdbConfigured(res, { fallbackArray: true })) return;
 
     const page = normalizePage(req.query.page, randomPage(5));
-    const data = await tmdbRequest("/discover/movie", {
-      sort_by: "popularity.desc",
-      include_adult: false,
-      page,
-    });
+    const data = await tmdbRequest(
+      "/discover/movie",
+      {
+        sort_by: "popularity.desc",
+        include_adult: false,
+        page,
+      },
+      { timeout: 7_000, retries: 0 }
+    );
 
     return res.json(toCardList(data.results || []).slice(0, 20));
   } catch (error) {
     console.error("Explore Error:", error.message);
-    return res.status(500).json({ message: error.message || "Failed to load explore movies" });
+    return res.json([]);
   }
 };
 

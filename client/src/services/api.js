@@ -1,11 +1,28 @@
 import axios from "axios";
 
+const normalizeBaseUrl = (value = "") => String(value || "").trim().replace(/\/+$/, "");
+
+const resolveApiBaseUrl = () => {
+  const fromEnv = normalizeBaseUrl(import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_URL);
+  if (fromEnv) return fromEnv;
+
+  if (typeof window !== "undefined" && window.location?.origin) {
+    return window.location.origin;
+  }
+
+  return "http://localhost:5000";
+};
+
+const resolveTimeoutMs = () => {
+  const raw = Number(import.meta.env.VITE_API_TIMEOUT_MS);
+  if (!Number.isFinite(raw) || raw <= 0) return 15_000;
+  return Math.min(Math.max(raw, 3_000), 60_000);
+};
+
 const api = axios.create({
-  baseURL:
-    import.meta.env.VITE_API_URL ||
-    import.meta.env.VITE_API_BASE_URL ||
-    "http://localhost:5000",
+  baseURL: resolveApiBaseUrl(),
   withCredentials: true,
+  timeout: resolveTimeoutMs(),
 });
 
 const getStoredAuthToken = () => {

@@ -54,12 +54,42 @@ app.set("trust proxy", 1);
 
 const server = http.createServer(app);
 
-const clientUrl = process.env.CLIENT_URL ? process.env.CLIENT_URL.replace(/\/$/, "") : "";
+const normalizeOrigin = (value = "") => String(value || "").trim().replace(/\/+$/, "");
+const parseAllowedOrigins = () => {
+  const raw = process.env.CORS_ORIGINS || process.env.CLIENT_URL || "";
+  return [...new Set(raw.split(",").map(normalizeOrigin).filter(Boolean))];
+};
+const allowedOrigins = parseAllowedOrigins();
+
+const matchesAllowedOrigin = (origin = "") => {
+  const normalizedOrigin = normalizeOrigin(origin);
+  if (!normalizedOrigin) return true;
+  if (!allowedOrigins.length) return true;
+
+  return allowedOrigins.some((rule) => {
+    if (!rule.includes("*")) {
+      return rule === normalizedOrigin;
+    }
+
+    const escapedRule = rule.replace(/[.+?^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*");
+    return new RegExp(`^${escapedRule}$`, "i").test(normalizedOrigin);
+  });
+};
+
 const corsOptions = {
-  origin:
-    process.env.NODE_ENV === "production"
-      ? clientUrl
-      : (origin, callback) => callback(null, true),
+  origin: (origin, callback) => {
+    if (process.env.NODE_ENV !== "production") {
+      callback(null, true);
+      return;
+    }
+
+    if (matchesAllowedOrigin(origin)) {
+      callback(null, true);
+      return;
+    }
+
+    callback(null, false);
+  },
   credentials: true,
 };
 
