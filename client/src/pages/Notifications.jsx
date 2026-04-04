@@ -1,39 +1,93 @@
-import { useEffect, useState } from "react";
-import api from "../services/api";
-import { formatDistanceToNow } from "date-fns";
+import { useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { useContext } from "react";
+import { formatDistanceToNow } from "date-fns";
+import api from "../services/api";
 import { NotificationContext } from "../context/NotificationContext";
 
+const NOTIFICATION_FETCH_TIMEOUT_MS = 12_000;
+
+const normalizeBaseUrl = (value = "") => String(value || "").trim().replace(/\/+$/, "");
+
+const resolveAvatarBaseUrl = () =>
+  normalizeBaseUrl(import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_URL || "");
+
+const getMovieIdFromNotification = (notification) => {
+  const review = notification?.reviewId;
+  if (!review) return "";
+  if (typeof review === "string") return review;
+  return String(review.movieId || "").trim();
+};
+
 const Notifications = () => {
-  const { setUnreadCount, latestNotification } = useContext(NotificationContext);
+  const { setUnreadCount, latestNotification, refetchUnreadCount } = useContext(NotificationContext);
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [error, setError] = useState("");
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(false);
+  const [pendingReadIds, setPendingReadIds] = useState(() => new Set());
 
-  const fetchNotifications = async (pageNum, isLoadMore = false) => {
-    if (isLoadMore) setLoadingMore(true);
-    else setLoading(true);
+  const avatarBaseUrl = useMemo(() => resolveAvatarBaseUrl(), []);
 
-    try {
-      const res = await api.get(`/api/notifications?page=${pageNum}&limit=10`);
-      const { notifications: newNotifications, hasMore: moreAvailable } = res.data;
-      
-      setNotifications(prev => isLoadMore ? [...prev, ...newNotifications] : newNotifications);
-      setHasMore(moreAvailable);
-    } catch (err) {
-      console.error("Failed to fetch notifications", err);
-    } finally {
-      setLoading(false);
-      setLoadingMore(false);
-    }
-  };
+  const toAvatarSrc = useCallback(
+    (avatar = "") => {
+      const value = String(avatar || "").trim();
+      if (!value) return "";
+      if (value.startsWith("http") || value.startsWith("data:")) return value;
+      if (!avatarBaseUrl) return value;
+      return `${avatarBaseUrl}${value.startsWith("/") ? "" : "/"}${value}`;
+    },
+    [avatarBaseUrl]
+  );
+
+  const fetchNotifications = useCallback(
+    async (pageNum, isLoadMore = false) => {
+      if (isLoadMore) setLoadingMore(true);
+      else {
+        setLoading(true);
+        setError("");
+      }
+
+      try {
+        const res = await api.get(`/api/notifications?page=${pageNum}&limit=10`, {
+          timeout: NOTIFICATION_FETCH_TIMEOUT_MS,
+        });
+
+        const incomingNotifications = Array.isArray(res.data?.notifications)
+          ? res.data.notifications
+          : [];
+
+        setNotifications((prev) => {
+          if (!isLoadMore) return incomingNotifications;
+
+          const byId = new Map(prev.map((item) => [item._id, item]));
+          incomingNotifications.forEach((item) => {
+            byId.set(item._id, item);
+          });
+          return [...byId.values()];
+        });
+
+        setHasMore(Boolean(res.data?.hasMore));
+        if (pageNum === 1) {
+          void refetchUnreadCount();
+        }
+      } catch (err) {
+        console.error("Failed to fetch notifications", err);
+        if (!isLoadMore) {
+          setError("Failed to load notifications. Please try again.");
+        }
+      } finally {
+        setLoading(false);
+        setLoadingMore(false);
+      }
+    },
+    [refetchUnreadCount]
+  );
 
   useEffect(() => {
-    fetchNotifications(1);
-  }, []);
+    void fetchNotifications(1);
+  }, [fetchNotifications]);
 
   useEffect(() => {
     if (!latestNotification?._id) return;
@@ -45,52 +99,84 @@ const Notifications = () => {
     });
   }, [latestNotification]);
 
-  const markAsRead = async (id) => {
-    try {
-      await api.put(`/api/notifications/${id}/read`);
-      setNotifications((prev) =>
-        prev.map((n) => (n._id === id ? { ...n, read: true } : n))
-      );
-      setUnreadCount((prev) => Math.max(0, prev - 1));
-    } catch (err) {
-      console.error("Failed to mark notification as read", err);
-    }
-  };
+  const markAsRead = useCallback(
+    async (id) => {
+      const notification = notifications.find((item) => item._id === id);
+      if (!notification || notification.read || pendingReadIds.has(id)) return;
 
-  const markAllAsRead = async () => {
-    try {
-      await api.put("/api/notifications/mark-read");
-      setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
-      setUnreadCount(0);
-    } catch (err) {
-      console.error("Failed to mark all as read", err);
-    }
-  };
+      setPendingReadIds((prev) => new Set(prev).add(id));
 
-  const handleLoadMore = () => {
+      try {
+        const res = await api.put(`/api/notifications/${id}/read`, null, {
+          timeout: NOTIFICATION_FETCH_TIMEOUT_MS,
+        });
+
+        setNotifications((prev) => prev.map((item) => (item._id === id ? { ...item, read: true } : item)));
+
+        const unreadCount = Number(res.data?.unreadCount);
+        if (Number.isFinite(unreadCount)) {
+          setUnreadCount(Math.max(0, unreadCount));
+        } else {
+          void refetchUnreadCount();
+        }
+      } catch (err) {
+        console.error("Failed to mark notification as read", err);
+      } finally {
+        setPendingReadIds((prev) => {
+          const next = new Set(prev);
+          next.delete(id);
+          return next;
+        });
+      }
+    },
+    [notifications, pendingReadIds, refetchUnreadCount, setUnreadCount]
+  );
+
+  const markAllAsRead = useCallback(async () => {
+    try {
+      const res = await api.put("/api/notifications/mark-read", null, {
+        timeout: NOTIFICATION_FETCH_TIMEOUT_MS,
+      });
+
+      setNotifications((prev) => prev.map((notification) => ({ ...notification, read: true })));
+
+      const unreadCount = Number(res.data?.unreadCount);
+      if (Number.isFinite(unreadCount)) {
+        setUnreadCount(Math.max(0, unreadCount));
+      } else {
+        setUnreadCount(0);
+      }
+    } catch (err) {
+      console.error("Failed to mark all notifications as read", err);
+    }
+  }, [setUnreadCount]);
+
+  const handleLoadMore = useCallback(() => {
+    if (loadingMore || !hasMore) return;
+
     const nextPage = page + 1;
     setPage(nextPage);
-    fetchNotifications(nextPage, true);
-  };
+    void fetchNotifications(nextPage, true);
+  }, [fetchNotifications, hasMore, loadingMore, page]);
+
+  const hasUnread = notifications.some((notification) => !notification.read);
 
   return (
     <div className="min-h-screen w-full overflow-x-hidden bg-transparent px-3 py-4 text-slate-900 transition-all duration-500 ease-in-out dark:text-slate-100 sm:px-5 md:px-8 md:py-8 lg:px-12">
-      <div className="max-w-3xl mx-auto">
+      <div className="mx-auto max-w-3xl">
         <header className="mb-10 flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 pb-6 dark:border-slate-800">
-          <h1 className="text-3xl md:text-4xl font-extrabold flex items-center gap-3">
-            <span className="text-rose-600">🔔</span> Notifications
-          </h1>
+          <h1 className="flex items-center gap-3 text-3xl font-extrabold md:text-4xl">Notifications</h1>
           <div className="flex flex-wrap items-center gap-3">
-            {notifications.some(n => !n.read) && (
-              <button 
+            {hasUnread && (
+              <button
                 onClick={markAllAsRead}
-                className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline transition-colors font-bold uppercase tracking-wider"
+                className="text-xs font-bold uppercase tracking-wider text-indigo-600 transition-colors hover:underline dark:text-indigo-400"
               >
                 Mark all as read
               </button>
             )}
             {notifications.length > 0 && (
-              <span className="bg-slate-100 dark:bg-slate-800 px-3 py-1 rounded-full text-xs font-bold text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-700">
+              <span className="rounded-full border border-slate-200 bg-slate-100 px-3 py-1 text-xs font-bold text-slate-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400">
                 {notifications.length} Total
               </span>
             )}
@@ -98,75 +184,104 @@ const Notifications = () => {
         </header>
 
         {loading ? (
-          <div className="flex flex-col items-center justify-center h-64 gap-4">
-            <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-red-500"></div>
-            <p className="text-gray-500 animate-pulse">Loading your activity...</p>
+          <div className="flex h-64 flex-col items-center justify-center gap-4">
+            <div className="h-12 w-12 animate-spin rounded-full border-b-2 border-t-2 border-red-500"></div>
+            <p className="animate-pulse text-gray-500">Loading your activity...</p>
           </div>
         ) : notifications.length === 0 ? (
-          <div className="text-center py-16 md:py-24 bg-slate-200/20 dark:bg-slate-800/20 rounded-3xl border border-slate-300 dark:border-slate-800 border-dashed flex flex-col items-center">
-            <span className="text-6xl mb-4 opacity-20">📭</span>
-            <p className="text-xl md:text-2xl text-slate-500 font-light">Your inbox is empty</p>
-            <p className="text-slate-400 mt-2">Interactions from your friends will appear here.</p>
+          <div className="flex flex-col items-center rounded-3xl border border-dashed border-slate-300 bg-slate-200/20 py-16 text-center dark:border-slate-800 dark:bg-slate-800/20 md:py-24">
+            <p className="text-xl font-light text-slate-500 md:text-2xl">Your inbox is empty</p>
+            <p className="mt-2 text-slate-400">Interactions from your friends will appear here.</p>
+            {error && (
+              <button
+                onClick={() => void fetchNotifications(1)}
+                className="mt-4 rounded-full bg-indigo-600 px-5 py-2 text-sm font-semibold text-white transition hover:bg-indigo-500"
+              >
+                Retry
+              </button>
+            )}
           </div>
         ) : (
           <div className="space-y-3">
-            {notifications.map((n) => (
-              <div 
-                key={n._id} 
-                onClick={() => !n.read && markAsRead(n._id)}
-                className={`group p-5 rounded-2xl border transition-all duration-300 ${
-                  n.read 
-                    ? "bg-white/50 dark:bg-slate-900/40 border-slate-200 dark:border-slate-800 hover:bg-white dark:hover:bg-slate-800/50" 
-                    : "bg-indigo-50/50 dark:bg-slate-900 border-indigo-100 dark:border-rose-500/20 shadow-sm hover:shadow-md dark:hover:border-rose-500/40"
-                } ${!n.read ? "cursor-pointer" : ""}`}
-              >
-                <div className="flex items-start gap-4">
-                  <div className="relative shrink-0">
-                    <div className="w-12 h-12 rounded-full bg-gradient-to-br from-red-500 to-orange-600 flex items-center justify-center text-white font-bold text-xl shadow-lg overflow-hidden">
-                      {n.sender?.avatar ? (
-                        <img 
-                          src={(n.sender.avatar.startsWith('http') || n.sender.avatar.startsWith('data:')) ? n.sender.avatar : `${import.meta.env.VITE_API_URL || ''}${n.sender.avatar.startsWith('/') ? '' : '/'}${n.sender.avatar}`} 
-                          alt={n.sender.name} 
-                          className="w-full h-full object-cover" 
-                          onError={(e) => { e.target.onerror = null; e.target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(n.sender?.name || 'User')}&background=random`; }}
-                        />
-                      ) : (
-                        n.sender?.name?.charAt(0).toUpperCase() || "U"
-                      )}
+            {notifications.map((notification) => {
+              const isUnread = !notification.read;
+              const movieId = getMovieIdFromNotification(notification);
+              const hasMovieLink = Boolean(movieId);
+              const avatarSrc = toAvatarSrc(notification.sender?.avatar || "");
+
+              return (
+                <div
+                  key={notification._id}
+                  onClick={() => {
+                    if (isUnread) void markAsRead(notification._id);
+                  }}
+                  className={`group rounded-2xl border p-5 transition-all duration-300 ${
+                    notification.read
+                      ? "border-slate-200 bg-white/50 hover:bg-white dark:border-slate-800 dark:bg-slate-900/40 dark:hover:bg-slate-800/50"
+                      : "border-indigo-100 bg-indigo-50/50 shadow-sm hover:shadow-md dark:border-rose-500/20 dark:bg-slate-900 dark:hover:border-rose-500/40"
+                  } ${isUnread ? "cursor-pointer" : ""}`}
+                >
+                  <div className="flex items-start gap-4">
+                    <div className="relative shrink-0">
+                      <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-red-500 to-orange-600 text-xl font-bold text-white shadow-lg">
+                        {avatarSrc ? (
+                          <img
+                            src={avatarSrc}
+                            alt={notification.sender?.name || "User"}
+                            className="h-full w-full object-cover"
+                            onError={(event) => {
+                              event.target.onerror = null;
+                              event.target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(
+                                notification.sender?.name || "User"
+                              )}&background=random`;
+                            }}
+                          />
+                        ) : (
+                          (notification.sender?.name || "U").charAt(0).toUpperCase()
+                        )}
+                      </div>
                     </div>
-                    <div className={`absolute -bottom-1 -right-1 w-6 h-6 rounded-full flex items-center justify-center text-xs border-2 border-white dark:border-slate-950 ${
-                      n.type === 'like' ? 'bg-blue-500' : n.type === 'mention' ? 'bg-yellow-500' : 'bg-green-500'
-                    }`}>
-                      {n.type === 'like' ? '👍' : n.type === 'mention' ? '📣' : '💬'}
-                    </div>
-                  </div>
-                  
-                  <div className="flex-1 min-w-0">
-                    <p className="break-words whitespace-normal leading-relaxed text-slate-600 dark:text-slate-300">
-                      <span className="font-bold text-slate-900 dark:text-white">
-                        {n.sender?.name || "A user"}
-                      </span>{" "}
-                      {n.type === "like" ? "liked your review for" : n.type === "mention" ? "mentioned you in a comment on" : "commented on your review for"}{" "}
-                      <Link 
-                        to={`/movie/${n.reviewId?.movieId || n.reviewId}`} 
-                        className="text-rose-600 dark:text-rose-500 hover:underline font-bold transition-colors"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          if (!n.read) markAsRead(n._id);
-                        }}
-                      >
-                        {n.movieTitle || "a movie"}
-                      </Link>
-                    </p>
-                    <div className="flex items-center gap-3 mt-2">
-                      <p className="text-[10px] text-gray-500 uppercase tracking-widest">
-                        🕒 {formatDistanceToNow(new Date(n.createdAt), { addSuffix: true })}
+
+                    <div className="min-w-0 flex-1">
+                      <p className="break-words whitespace-normal leading-relaxed text-slate-600 dark:text-slate-300">
+                        <span className="font-bold text-slate-900 dark:text-white">
+                          {notification.sender?.name || "A user"}
+                        </span>{" "}
+                        {notification.type === "like"
+                          ? "liked your review for"
+                          : notification.type === "mention"
+                            ? "mentioned you in a comment on"
+                            : "commented on your review for"}{" "}
+                        {hasMovieLink ? (
+                          <Link
+                            to={`/movie/${movieId}`}
+                            className="font-bold text-rose-600 transition-colors hover:underline dark:text-rose-500"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              if (isUnread) void markAsRead(notification._id);
+                            }}
+                          >
+                            {notification.movieTitle || "a movie"}
+                          </Link>
+                        ) : (
+                          <span className="font-bold text-rose-600 dark:text-rose-500">
+                            {notification.movieTitle || "a movie"}
+                          </span>
+                        )}
                       </p>
+                      <div className="mt-2 flex items-center gap-3">
+                        <p className="text-[10px] uppercase tracking-widest text-gray-500">
+                          {formatDistanceToNow(new Date(notification.createdAt), { addSuffix: true })}
+                        </p>
+                        {pendingReadIds.has(notification._id) && (
+                          <span className="text-[10px] text-indigo-500">Updating...</span>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
 

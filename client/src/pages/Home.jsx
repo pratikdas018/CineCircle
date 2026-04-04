@@ -33,6 +33,12 @@ const Home = () => {
   const [activeMentionInput, setActiveMentionInput] = useState(null); // 'new' or 'edit'
   const [mentionStartIndex, setMentionStartIndex] = useState(-1);
   const MOVIE_REQUEST_TIMEOUT_MS = 12_000;
+  const normalizeMentionToken = (value = "") =>
+    String(value || "")
+      .trim()
+      .toLowerCase()
+      .replace(/\s+/g, "")
+      .replace(/[^\w.]/g, "");
 
   // 📰 Load friends activity feed
   const fetchFeed = async (pageNum, isLoadMore = false) => {
@@ -203,7 +209,12 @@ const Home = () => {
       // Try to find the user via the search API
       const res = await api.get(`/api/search/users?q=${username}`);
       // Find an exact match (case-insensitive)
-      const match = res.data.find(u => u.name.toLowerCase().trim() === username.toLowerCase().trim());
+      const normalizedTarget = normalizeMentionToken(username);
+      const match = res.data.find(
+        (u) =>
+          String(u.name || "").toLowerCase().trim() === username.toLowerCase().trim() ||
+          normalizeMentionToken(u.name) === normalizedTarget
+      );
       
       if (match) {
         navigate(`/profile/${match._id}`);
@@ -221,19 +232,32 @@ const Home = () => {
 
     // Use a Map for O(1) lookup and handle potential duplicates/incomplete objects
     const userMap = new Map();
-    friends.forEach(f => { if (f.name) userMap.set(f.name.toLowerCase().trim(), f); });
-    if (user?.name) userMap.set(user.name.toLowerCase().trim(), user);
+    friends.forEach((f) => {
+      if (!f.name) return;
+      userMap.set(f.name.toLowerCase().trim(), f);
+      userMap.set(normalizeMentionToken(f.name), f);
+    });
+    if (user?.name) {
+      userMap.set(user.name.toLowerCase().trim(), user);
+      userMap.set(normalizeMentionToken(user.name), user);
+    }
     feed.forEach(r => {
-      if (r.user?.name) userMap.set(r.user.name.toLowerCase().trim(), r.user);
+      if (r.user?.name) {
+        userMap.set(r.user.name.toLowerCase().trim(), r.user);
+        userMap.set(normalizeMentionToken(r.user.name), r.user);
+      }
       r.comments?.forEach(c => {
-        if (c.user?.name) userMap.set(c.user.name.toLowerCase().trim(), c.user);
+        if (c.user?.name) {
+          userMap.set(c.user.name.toLowerCase().trim(), c.user);
+          userMap.set(normalizeMentionToken(c.user.name), c.user);
+        }
       });
     });
 
     return parts.map((part, index) => {
       if (part.startsWith("@")) {
         const username = part.substring(1).toLowerCase().trim();
-        const targetUser = userMap.get(username);
+        const targetUser = userMap.get(username) || userMap.get(normalizeMentionToken(username));
 
         return (
           <MentionWithPreview
@@ -250,8 +274,14 @@ const Home = () => {
   };
 
   const insertMention = (friendName) => {
+    const mentionToken = normalizeMentionToken(friendName);
+    if (!mentionToken) return;
+
     const currentText = activeMentionInput === 'new' ? commentText : editText;
-    const newText = currentText.substring(0, mentionStartIndex) + `@${friendName} ` + currentText.substring(mentionStartIndex + mentionSearch.length + 1);
+    const newText =
+      currentText.substring(0, mentionStartIndex) +
+      `@${mentionToken} ` +
+      currentText.substring(mentionStartIndex + mentionSearch.length + 1);
     
     if (activeMentionInput === 'new') setCommentText(newText);
     else setEditText(newText);

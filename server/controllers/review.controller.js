@@ -3,17 +3,47 @@ import User from "../models/User.js";
 import Watchlist from "../models/Watchlist.js";
 import { createNotificationAndEmit } from "../utils/notificationRealtime.js";
 
-const getMentionedUsers = async (text) => {
+const escapeRegex = (value = "") => String(value || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+const extractMentionUsernames = (text = "") => {
   const mentionRegex = /@([\w.]+)/g;
-  const mentionedUsernames = Array.from(
-    new Set((text.match(mentionRegex) || []).map((match) => match.substring(1)))
-  );
+  const usernames = new Set();
+
+  for (const match of String(text || "").matchAll(mentionRegex)) {
+    const username = String(match?.[1] || "").trim();
+    if (username) usernames.add(username);
+  }
+
+  return [...usernames];
+};
+
+const getMentionedUsers = async (text) => {
+  const mentionedUsernames = extractMentionUsernames(text);
 
   if (mentionedUsernames.length === 0) {
     return [];
   }
 
-  return User.find({ name: { $in: mentionedUsernames } }).select("_id name");
+  const nameMatchers = mentionedUsernames.map((username) => ({
+    name: { $regex: `^${escapeRegex(username)}$`, $options: "i" },
+  }));
+
+  return User.find({ $or: nameMatchers }).select("_id name");
+};
+
+const emitNotificationsSafely = async (notificationPayloads = []) => {
+  const tasks = notificationPayloads
+    .filter(Boolean)
+    .map((payload) => createNotificationAndEmit(payload));
+
+  if (!tasks.length) return;
+
+  const settled = await Promise.allSettled(tasks);
+  settled.forEach((result) => {
+    if (result.status === "rejected") {
+      console.error("Notification emit failed:", result.reason?.message || "Unknown error");
+    }
+  });
 };
 
 export const addReview = async (req, res) => {
@@ -159,25 +189,39 @@ export const addComment = async (req, res) => {
     await review.save();
 
     const mentionedUsers = await getMentionedUsers(text);
-    for (const mentionedUser of mentionedUsers) {
-      if (mentionedUser._id.toString() === review.user.toString()) continue;
+    const senderId = String(req.user._id);
+    const reviewOwnerId = String(review.user);
+    const notifiedRecipients = new Set();
+    const notificationPayloads = [];
 
-      await createNotificationAndEmit({
-        recipient: mentionedUser._id,
-        sender: req.user._id,
+    for (const mentionedUser of mentionedUsers) {
+      const mentionedUserId = String(mentionedUser._id);
+      if (!mentionedUserId || mentionedUserId === senderId || mentionedUserId === reviewOwnerId) {
+        continue;
+      }
+      if (notifiedRecipients.has(mentionedUserId)) continue;
+
+      notifiedRecipients.add(mentionedUserId);
+      notificationPayloads.push({
+        recipient: mentionedUserId,
+        sender: senderId,
         type: "mention",
         reviewId: review._id,
         movieTitle: review.movieTitle,
       });
     }
 
-    await createNotificationAndEmit({
-      recipient: review.user,
-      sender: req.user._id,
-      type: "comment",
-      reviewId: review._id,
-      movieTitle: review.movieTitle,
-    });
+    if (reviewOwnerId && reviewOwnerId !== senderId) {
+      notificationPayloads.push({
+        recipient: reviewOwnerId,
+        sender: senderId,
+        type: "comment",
+        reviewId: review._id,
+        movieTitle: review.movieTitle,
+      });
+    }
+
+    await emitNotificationsSafely(notificationPayloads);
 
     const updatedReview = await Review.findById(review._id)
       .populate("user", "name avatar")
@@ -208,25 +252,39 @@ export const updateComment = async (req, res) => {
     await review.save();
 
     const mentionedUsers = await getMentionedUsers(text);
-    for (const mentionedUser of mentionedUsers) {
-      if (mentionedUser._id.toString() === review.user.toString()) continue;
+    const senderId = String(req.user._id);
+    const reviewOwnerId = String(review.user);
+    const notifiedRecipients = new Set();
+    const notificationPayloads = [];
 
-      await createNotificationAndEmit({
-        recipient: mentionedUser._id,
-        sender: req.user._id,
+    for (const mentionedUser of mentionedUsers) {
+      const mentionedUserId = String(mentionedUser._id);
+      if (!mentionedUserId || mentionedUserId === senderId || mentionedUserId === reviewOwnerId) {
+        continue;
+      }
+      if (notifiedRecipients.has(mentionedUserId)) continue;
+
+      notifiedRecipients.add(mentionedUserId);
+      notificationPayloads.push({
+        recipient: mentionedUserId,
+        sender: senderId,
         type: "mention",
         reviewId: review._id,
         movieTitle: review.movieTitle,
       });
     }
 
-    await createNotificationAndEmit({
-      recipient: review.user,
-      sender: req.user._id,
-      type: "comment",
-      reviewId: review._id,
-      movieTitle: review.movieTitle,
-    });
+    if (reviewOwnerId && reviewOwnerId !== senderId) {
+      notificationPayloads.push({
+        recipient: reviewOwnerId,
+        sender: senderId,
+        type: "comment",
+        reviewId: review._id,
+        movieTitle: review.movieTitle,
+      });
+    }
+
+    await emitNotificationsSafely(notificationPayloads);
 
     const updatedReview = await Review.findById(review._id)
       .populate("user", "name avatar")
@@ -246,19 +304,23 @@ export const likeReview = async (req, res) => {
     const index = review.likes.indexOf(req.user._id);
     if (index === -1) {
       review.likes.push(req.user._id);
-      await createNotificationAndEmit({
-        recipient: review.user,
-        sender: req.user._id,
-        type: "like",
-        reviewId: review._id,
-        movieTitle: review.movieTitle,
-      });
+      await review.save();
+
+      await emitNotificationsSafely([
+        {
+          recipient: review.user,
+          sender: req.user._id,
+          type: "like",
+          reviewId: review._id,
+          movieTitle: review.movieTitle,
+        },
+      ]);
+      return res.json({ likes: review.likes });
     } else {
       review.likes.splice(index, 1);
+      await review.save();
+      return res.json({ likes: review.likes });
     }
-
-    await review.save();
-    return res.json({ likes: review.likes });
   } catch (error) {
     return res.status(500).json({ message: error.message });
   }

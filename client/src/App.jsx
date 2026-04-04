@@ -1,5 +1,5 @@
 import { BrowserRouter, useLocation } from "react-router-dom";
-import { useEffect } from "react";
+import { useContext, useEffect } from "react";
 import { GoogleOAuthProvider } from "@react-oauth/google";
 import { AuthProvider, AuthContext } from "./context/AuthContext";
 import { SocketProvider } from "./context/SocketContext";
@@ -32,22 +32,26 @@ const AnimatedApp = () => {
   );
 };
 
+const AppRuntime = () => {
+  const { user } = useContext(AuthContext);
+
+  return (
+    <SocketProvider user={user}>
+      <NotificationProvider>
+        <BrowserRouter>
+          <AnimatedApp />
+        </BrowserRouter>
+      </NotificationProvider>
+    </SocketProvider>
+  );
+};
+
 function AppWrapper() {
   return (
     <GoogleOAuthProvider clientId={import.meta.env.VITE_GOOGLE_CLIENT_ID}>
       <ThemeProvider>
         <AuthProvider>
-          <NotificationProvider>
-            <AuthContext.Consumer>
-              {({ user }) => (
-                <SocketProvider user={user}>
-                  <BrowserRouter>
-                    <AnimatedApp />
-                  </BrowserRouter>
-                </SocketProvider>
-              )}
-            </AuthContext.Consumer>
-          </NotificationProvider>
+          <AppRuntime />
         </AuthProvider>
       </ThemeProvider>
     </GoogleOAuthProvider>
