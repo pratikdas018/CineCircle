@@ -33,7 +33,9 @@ const getTrendingFallback = async () => {
 
 const assertTmdbConfigured = (res) => {
   if (hasTmdbApiKey()) return true;
-  res.status(500).json({ message: "TMDB_API_KEY is not configured on server" });
+  res.status(500).json({
+    message: "TMDB credentials are not configured on server (TMDB_API_KEY or TMDB_READ_ACCESS_TOKEN)",
+  });
   return false;
 };
 

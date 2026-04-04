@@ -6,7 +6,116 @@ const DEFAULT_TIMEOUT_MS = 10_000;
 const DEFAULT_RETRIES = 2;
 const RETRYABLE_STATUS_CODES = new Set([408, 409, 425, 429, 500, 502, 503, 504]);
 
-const getApiKey = () => process.env.TMDB_API_KEY?.trim();
+const normalizeSecret = (value = "") => {
+  const trimmed = String(value || "").trim();
+  if (!trimmed) return "";
+
+  const wrappedByDoubleQuotes = trimmed.startsWith("\"") && trimmed.endsWith("\"");
+  const wrappedBySingleQuotes = trimmed.startsWith("'") && trimmed.endsWith("'");
+  if (wrappedByDoubleQuotes || wrappedBySingleQuotes) {
+    return trimmed.slice(1, -1).trim();
+  }
+
+  return trimmed;
+};
+
+const readFirstEnvValue = (...names) => {
+  for (const name of names) {
+    const value = normalizeSecret(process.env[name]);
+    if (value) return value;
+  }
+
+  return "";
+};
+
+const normalizeBearerToken = (value = "") =>
+  normalizeSecret(value).replace(/^Bearer\s+/i, "").trim();
+
+const looksLikeTmdbV3ApiKey = (value = "") => /^[a-f0-9]{32}$/i.test(String(value || ""));
+
+const extractApiKeyFromValue = (value = "") => {
+  const normalized = normalizeSecret(value);
+  if (!normalized) return "";
+
+  const directMatch = normalized.match(/[a-f0-9]{32}/i);
+  if (looksLikeTmdbV3ApiKey(normalized)) return normalized;
+
+  if (/^api_key=/i.test(normalized)) {
+    return normalizeSecret(normalized.slice("api_key=".length));
+  }
+
+  const queryMatch = normalized.match(/[?&]api_key=([a-f0-9]{32})/i);
+  if (queryMatch?.[1]) return queryMatch[1];
+
+  if (directMatch?.[0] && directMatch[0].length === 32) return directMatch[0];
+  return "";
+};
+
+const extractReadTokenFromValue = (value = "") => {
+  const normalized = normalizeBearerToken(value);
+  if (!normalized) return "";
+
+  if (/^(access_token|token)=/i.test(normalized)) {
+    return normalizeBearerToken(normalized.slice(normalized.indexOf("=") + 1));
+  }
+
+  const queryMatch = normalized.match(/[?&](access_token|token)=([^&\s]+)/i);
+  if (queryMatch?.[2]) return normalizeBearerToken(queryMatch[2]);
+
+  return normalized;
+};
+
+const getApiKey = () =>
+  extractApiKeyFromValue(readFirstEnvValue("TMDB_API_KEY", "TMDB_V3_API_KEY", "TMDB_KEY"));
+const getReadAccessToken = () =>
+  extractReadTokenFromValue(
+    readFirstEnvValue(
+      "TMDB_READ_ACCESS_TOKEN",
+      "TMDB_ACCESS_TOKEN",
+      "TMDB_TOKEN",
+      "TMDB_BEARER_TOKEN",
+      "TMDB_API_READ_ACCESS_TOKEN",
+      "TMDB_V4_READ_ACCESS_TOKEN",
+      "TMDB_V4_TOKEN"
+    )
+  );
+
+const getAuthCandidates = () => {
+  const rawApiKeyValue = readFirstEnvValue("TMDB_API_KEY", "TMDB_V3_API_KEY", "TMDB_KEY");
+  const apiKeyValue = extractApiKeyFromValue(rawApiKeyValue);
+  const readAccessToken = getReadAccessToken();
+  const candidates = [];
+
+  if (apiKeyValue) {
+    candidates.push({ type: "api_key", value: apiKeyValue });
+
+    // Accept tokens accidentally placed in TMDB_API_KEY.
+    if (!readAccessToken && !looksLikeTmdbV3ApiKey(rawApiKeyValue)) {
+      const tokenFromApiKeyVar = extractReadTokenFromValue(rawApiKeyValue);
+      if (tokenFromApiKeyVar) {
+        candidates.push({ type: "bearer", value: tokenFromApiKeyVar });
+      }
+    }
+  } else if (!readAccessToken) {
+    const tokenFromApiKeyVar = extractReadTokenFromValue(rawApiKeyValue);
+    if (tokenFromApiKeyVar) {
+      candidates.push({ type: "bearer", value: tokenFromApiKeyVar });
+    }
+  }
+
+  if (readAccessToken) {
+    candidates.push({ type: "bearer", value: readAccessToken });
+  }
+
+  const seen = new Set();
+  return candidates.filter((candidate) => {
+    const key = `${candidate.type}:${candidate.value}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+};
+
 const getTimeoutMs = () => {
   const parsed = Number(process.env.TMDB_TIMEOUT_MS);
   if (!Number.isFinite(parsed) || parsed <= 0) return DEFAULT_TIMEOUT_MS;
@@ -20,7 +129,9 @@ export const getTmdbBaseUrl = () =>
 export const getTmdbImageBaseUrl = () =>
   process.env.TMDB_IMAGE_BASE_URL?.trim() || DEFAULT_TMDB_IMAGE_BASE_URL;
 
-export const hasTmdbApiKey = () => Boolean(getApiKey());
+const hasTmdbCredentials = () => getAuthCandidates().length > 0;
+export const hasTmdbAuth = () => hasTmdbCredentials();
+export const hasTmdbApiKey = () => hasTmdbCredentials();
 
 const isRetryableError = (error) => {
   const status = Number(error?.response?.status || 0);
@@ -28,10 +139,23 @@ const isRetryableError = (error) => {
   return !status;
 };
 
+const toWrappedTmdbError = (error) => {
+  const status = Number(error?.response?.status || 0);
+  const detail = error?.response?.data?.status_message || error?.message || "Request failed";
+  const wrappedError = new Error(
+    status ? `TMDB request failed (${status}): ${detail}` : `TMDB request failed: ${detail}`
+  );
+  wrappedError.status = status || 500;
+  return wrappedError;
+};
+
 export const tmdbRequest = async (path, params = {}, options = {}) => {
-  const apiKey = getApiKey();
-  if (!apiKey) {
-    throw new Error("TMDB_API_KEY is not configured");
+  const authCandidates = getAuthCandidates();
+
+  if (!authCandidates.length) {
+    throw new Error(
+      "TMDB credentials are not configured (set TMDB_API_KEY or TMDB_READ_ACCESS_TOKEN)"
+    );
   }
 
   const includeLanguage = options.includeLanguage !== false;
@@ -40,40 +164,50 @@ export const tmdbRequest = async (path, params = {}, options = {}) => {
       ? options.retries
       : DEFAULT_RETRIES;
   const timeout = Math.max(1_000, Number(options.timeout || getTimeoutMs()));
+  const sharedParams = {
+    ...(includeLanguage ? { language: "en-US" } : {}),
+    ...params,
+  };
 
   let lastError = null;
+  for (let authIndex = 0; authIndex < authCandidates.length; authIndex += 1) {
+    const auth = authCandidates[authIndex];
 
-  for (let attempt = 0; attempt <= retries; attempt += 1) {
-    try {
-      const queryParams = {
-        api_key: apiKey,
-        ...(includeLanguage ? { language: "en-US" } : {}),
-        ...params,
-      };
+    for (let attempt = 0; attempt <= retries; attempt += 1) {
+      try {
+        const queryParams =
+          auth.type === "api_key" ? { ...sharedParams, api_key: auth.value } : sharedParams;
 
-      const { data } = await axios.get(`${getTmdbBaseUrl()}${path}`, {
-        params: queryParams,
-        timeout,
-      });
+        const requestConfig = {
+          params: queryParams,
+          timeout,
+          ...(auth.type === "bearer"
+            ? { headers: { Authorization: `Bearer ${auth.value}` } }
+            : {}),
+        };
 
-      return data;
-    } catch (error) {
-      lastError = error;
-      if (attempt >= retries || !isRetryableError(error)) {
-        break;
+        const { data } = await axios.get(`${getTmdbBaseUrl()}${path}`, requestConfig);
+        return data;
+      } catch (error) {
+        lastError = error;
+
+        if (attempt < retries && isRetryableError(error)) {
+          await sleep(Math.min(300 * 2 ** attempt, 2_000));
+          continue;
+        }
+
+        const status = Number(error?.response?.status || 0);
+        const hasFallbackAuth = authIndex < authCandidates.length - 1;
+        if (status === 401 && hasFallbackAuth) {
+          break;
+        }
+
+        throw toWrappedTmdbError(error);
       }
-
-      await sleep(Math.min(300 * 2 ** attempt, 2_000));
     }
   }
 
-  const status = Number(lastError?.response?.status || 0);
-  const detail = lastError?.response?.data?.status_message || lastError?.message || "Request failed";
-  const wrappedError = new Error(
-    status ? `TMDB request failed (${status}): ${detail}` : `TMDB request failed: ${detail}`
-  );
-  wrappedError.status = status || 500;
-  throw wrappedError;
+  throw toWrappedTmdbError(lastError || new Error("TMDB request failed"));
 };
 
 const formatDate = (dateValue = "") => {
