@@ -60,11 +60,12 @@ const Navbar = () => {
       <div className="mx-auto w-full max-w-7xl px-3 sm:px-5 md:px-8 lg:px-12">
         <div className="flex h-16 w-full items-center justify-between gap-2">
           <div className="flex min-w-0 items-center">
-            <Link to="/" className="flex min-w-0 items-center gap-2" onClick={closeMenu}>
-              <span className="text-lg font-bold text-slate-700 dark:text-slate-100 sm:text-xl">CC</span>
-              <span className="truncate bg-gradient-to-r from-rose-500 to-orange-500 bg-clip-text text-base font-bold text-transparent sm:text-lg">
-                CineCircle
-              </span>
+            <Link to="/" className="flex min-w-0 items-center" onClick={closeMenu} aria-label="CineCircle home">
+              <img
+                src="/cinecircle-navbar.png"
+                alt="CineCircle"
+                className="h-11 w-auto max-w-[210px] object-contain sm:h-12 sm:max-w-[260px] lg:max-w-[280px]"
+              />
             </Link>
             <div className="ml-6 hidden items-center gap-1 lg:flex">
               {navLinks.map((link) => (

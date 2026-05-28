@@ -81,6 +81,12 @@ const Chat = () => {
     container.scrollTo({ top: container.scrollHeight, behavior });
   };
 
+  const handleScrollToBottomClick = () => {
+    isNearBottomRef.current = true;
+    setShowScrollBottom(false);
+    scrollToBottom();
+  };
+
   useEffect(() => {
     if (!userId) return;
 
@@ -662,7 +668,7 @@ const Chat = () => {
 
           {showScrollBottom && (
             <button
-              onClick={scrollToBottom}
+              onClick={handleScrollToBottomClick}
               className="absolute bottom-4 right-4 bg-indigo-600 hover:bg-indigo-700 text-white p-2 rounded-full shadow-lg transition-all z-20 animate-bounce"
               title="Scroll to bottom"
             >
