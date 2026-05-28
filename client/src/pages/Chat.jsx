@@ -62,6 +62,8 @@ const Chat = () => {
   const typingTimeoutRef = useRef(null);
   const textareaRef = useRef(null);
   const chatContainerRef = useRef(null);
+  const isNearBottomRef = useRef(true);
+  const previousMessagesLengthRef = useRef(0);
   const [showScrollBottom, setShowScrollBottom] = useState(false);
   const [isMuted, setIsMuted] = useState(() => localStorage.getItem("chatMuted") === "true");
 
@@ -84,6 +86,9 @@ const Chat = () => {
 
     setLoading(true);
     setIsTyping(false);
+    isNearBottomRef.current = true;
+    previousMessagesLengthRef.current = 0;
+    setShowScrollBottom(false);
     
     api.get(`/api/users/${id}`).then(res => setFriend(res.data)).catch(console.error);
 
@@ -101,13 +106,28 @@ const Chat = () => {
   }, [id, socket, userId]);
 
   useEffect(() => {
-    const lastMessage = messages[messages.length - 1];
-    const isOwnMessage = lastMessage?.sender === userId;
-    
-    if (isOwnMessage || !showScrollBottom) {
-      scrollToBottom();
+    if (messages.length === 0) {
+      previousMessagesLengthRef.current = 0;
+      return;
     }
-  }, [messages, isTyping, isSearchOpen, searchResults, showScrollBottom, userId]);
+
+    const previousMessagesLength = previousMessagesLengthRef.current;
+    const lastMessage = messages[messages.length - 1];
+    const hasNewMessage = messages.length > previousMessagesLength;
+    const isOwnMessage = lastMessage?.sender === userId;
+
+    if (previousMessagesLength === 0 || (hasNewMessage && (isOwnMessage || isNearBottomRef.current))) {
+      requestAnimationFrame(() => scrollToBottom(previousMessagesLength === 0 ? "auto" : "smooth"));
+    }
+
+    previousMessagesLengthRef.current = messages.length;
+  }, [messages, userId]);
+
+  useEffect(() => {
+    if (isTyping && isNearBottomRef.current) {
+      requestAnimationFrame(() => scrollToBottom());
+    }
+  }, [isTyping]);
 
   useEffect(() => {
     if (textareaRef.current) {
@@ -395,6 +415,7 @@ const Chat = () => {
     if (chatContainerRef.current) {
       const { scrollTop, scrollHeight, clientHeight } = chatContainerRef.current;
       const isBottom = scrollHeight - scrollTop - clientHeight < 100;
+      isNearBottomRef.current = isBottom;
       setShowScrollBottom(!isBottom);
     }
   };
