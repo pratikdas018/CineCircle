@@ -402,8 +402,8 @@ const Chat = () => {
   const displayedMessages = isSearchOpen && searchQuery ? searchResults : messages;
 
   return (
-    <div className="h-[100dvh] w-full overflow-hidden bg-transparent px-1 py-2 text-slate-900 transition-all duration-500 ease-in-out dark:text-slate-100 sm:px-3 md:px-8">
-      <div className="mx-auto flex w-full max-w-4xl flex-1 flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition-all duration-500 dark:border-slate-800 dark:bg-slate-900">
+    <div className="flex h-[calc(100dvh-4rem)] w-full overflow-hidden bg-transparent px-1 py-2 text-slate-900 transition-all duration-500 ease-in-out dark:text-slate-100 sm:px-3 md:px-8">
+      <div className="mx-auto flex h-full min-h-0 w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition-all duration-500 dark:border-slate-800 dark:bg-slate-900">
         
         {/* Header */}
         <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 bg-slate-100 p-3 dark:border-slate-700 dark:bg-slate-900 sm:gap-3 sm:p-4">
